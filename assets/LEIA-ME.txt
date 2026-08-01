@@ -1,0 +1,24 @@
+Coloque aqui a logo do sistema.
+
+Nome sugerido: logo.png  (ou logo.svg)
+Tamanho ideal: quadrada, 256x256 px ou maior, com fundo transparente.
+
+Depois, troque o conteúdo de dois pontos do código:
+
+1) Tela de login — js/pages/login.js, procure por 'logo-slot__box':
+
+   '<div class="logo-slot__box" id="logo-slot">CELAB</div>'
+
+   vira:
+
+   '<div class="logo-slot__box"><img src="assets/logo.png" alt="Logo CELAB"></div>'
+
+2) Barra lateral — js/app.js, procure por 'sidebar__logo':
+
+   '<div class="sidebar__logo" id="sidebar-logo">CL</div>'
+
+   vira:
+
+   '<div class="sidebar__logo"><img src="assets/logo.png" alt=""></div>'
+
+O CSS já cuida do recorte e do dimensionamento nos dois lugares.

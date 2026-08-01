@@ -1,0 +1,49 @@
+<!doctype html>
+<!-- Página auxiliar de inspeção visual: entra automaticamente como admin e
+     abre a rota indicada em ?rota=  (dashboard|estoque|entrada|saida|relatorios)
+     e o tema em ?tema= (light|dark). Não faz parte do sistema. -->
+<html lang="pt-BR" data-theme="light">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>CELAB · Preview</title>
+  <link rel="stylesheet" href="../css/styles.css">
+  <script defer src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+</head>
+<body>
+  <div id="app"></div>
+  <div class="toast-stack" id="toast-stack"></div>
+
+  <script src="../js/config.js"></script>
+  <script src="../js/ui.js"></script>
+  <script src="../js/store.js"></script>
+  <script src="../js/charts.js"></script>
+  <script src="../js/export.js"></script>
+  <script src="../js/pages/login.js"></script>
+  <script src="../js/pages/dashboard.js"></script>
+  <script src="../js/pages/estoque.js"></script>
+  <script src="../js/pages/entrada.js"></script>
+  <script src="../js/pages/saida.js"></script>
+  <script src="../js/pages/relatorios.js"></script>
+
+  <script>
+    (function () {
+      var q = new URLSearchParams(location.search);
+      var tema = q.get('tema') || 'light';
+      localStorage.setItem(CELAB.APP.themeKey, tema);
+      document.documentElement.setAttribute('data-theme', tema);
+
+      // A rota vem pelo hash da própria URL (…/preview.html?tema=dark#/estoque);
+      // mexer em location.hash aqui abortaria a captura em headless.
+      if (q.get('login') !== '1') {
+        sessionStorage.setItem(CELAB.APP.sessionKey, JSON.stringify({
+          id: 'preview', usuario: 'admin', nome: 'Ezequiel Lopes',
+          perfil: 'admin', entrouEm: new Date().toISOString()
+        }));
+      }
+    })();
+  </script>
+
+  <script defer src="../js/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="pt-BR" data-theme="light">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="description" content="CELAB — Controle de Estoque de Laboratório: entradas, saídas, inventário e relatórios em tempo real.">
+  <meta name="color-scheme" content="light dark">
+  <meta name="theme-color" content="#14181f">
+  <title>CELAB · Controle de Estoque de Laboratório</title>
+
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='22' fill='%232a78d6'/><text x='50' y='68' font-size='52' font-family='system-ui,sans-serif' font-weight='700' fill='white' text-anchor='middle'>C</text></svg>">
+  <link rel="stylesheet" href="css/styles.css">
+
+  <!-- Bibliotecas externas (CDN). Sem elas o app continua funcionando:
+       os gráficos caem para a tabela equivalente e a exportação para CSV
+       e para a janela de impressão. -->
+  <script defer src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <script defer src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script defer src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+</head>
+
+<body>
+  <a href="#pagina" class="sr-only">Pular para o conteúdo</a>
+
+  <div id="app"></div>
+  <div class="toast-stack" id="toast-stack" aria-live="polite" aria-atomic="false"></div>
+
+  <!-- Ordem de carregamento: config -> util/ui -> store -> gráficos/exportação
+       -> páginas -> shell. Scripts clássicos (sem type="module") para que o
+       index.html funcione ao ser aberto direto do disco (file://). -->
+  <script src="js/config.js"></script>
+  <script src="js/ui.js"></script>
+  <script src="js/store.js"></script>
+  <script src="js/charts.js"></script>
+  <script src="js/export.js"></script>
+  <script src="js/pages/login.js"></script>
+  <script src="js/pages/dashboard.js"></script>
+  <script src="js/pages/estoque.js"></script>
+  <script src="js/pages/entrada.js"></script>
+  <script src="js/pages/saida.js"></script>
+  <script src="js/pages/relatorios.js"></script>
+  <script defer src="js/app.js"></script>
+</body>
+</html>
