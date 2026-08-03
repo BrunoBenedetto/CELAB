@@ -1,10 +1,10 @@
 /* ==========================================================================
    CELAB — Aba: Saída de Equipamentos
    --------------------------------------------------------------------------
-   Salvar aqui tira o item do estoque físico: o status vira "Disponibilizado"
-   com destino preenchido. O registro não é apagado, para preservar a
-   rastreabilidade patrimonial — e some da aba Estoque (filtro "No laboratório")
-   e dos indicadores da Dashboard no mesmo instante.
+   Salvar aqui retira o item do estoque físico: `noLaboratorio` vira false e o
+   destino é preenchido. O registro não é apagado, para preservar a
+   rastreabilidade patrimonial — mas some da aba Estoque (filtro "No
+   laboratório") e dos indicadores da Dashboard no mesmo instante.
    ========================================================================== */
 
 (function (CELAB) {
@@ -12,6 +12,7 @@
 
   var UI = CELAB.ui;
   var U = CELAB.util;
+  var L = CELAB.listas;
 
   function esqueleto() {
     return '' +
@@ -24,15 +25,15 @@
 
       '<div class="alert alert--info">' + UI.icone('info', 17) +
         '<span>Informe o <strong>tombo</strong> e o sistema localiza o equipamento no estoque. ' +
-        'Ao salvar, ele sai do estoque do laboratório (status <strong>Disponibilizado</strong>) ' +
-        'e os indicadores são recalculados na hora.</span>' +
+        'Ao salvar, ele sai do laboratório e os indicadores são recalculados na hora.</span>' +
       '</div>' +
 
       '<div class="card" style="margin-bottom:18px">' +
         '<div class="card__head">' +
           '<div>' +
             '<div class="card__title">Dados da saída</div>' +
-            '<div class="card__sub">Campos com <span style="color:var(--status-critical)">*</span> são obrigatórios</div>' +
+            '<div class="card__sub">Campos com <span style="color:var(--status-critical)">*</span> ' +
+              'são obrigatórios · o ícone ⚙ ao lado de um campo abre o gerenciador da lista</div>' +
           '</div>' +
         '</div>' +
         '<div class="card__body">' +
@@ -72,35 +73,69 @@
 
               '<div class="field">' +
                 '<label for="sa-equipamento">Equipamento <span class="req">*</span></label>' +
-                '<select class="select" id="sa-equipamento" name="equipamento" data-obrigatorio>' +
-                  UI.opcoes(CELAB.EQUIPAMENTOS) + '</select>' +
+                UI.selectGerenciavel({
+                  id: 'sa-equipamento', name: 'equipamento',
+                  lista: 'equipamentos', obrigatorio: true
+                }) +
                 '<span class="field__error">Selecione o equipamento.</span>' +
               '</div>' +
 
               '<div class="field">' +
                 '<label for="sa-modelo">Modelo <span class="req">*</span></label>' +
-                '<select class="select" id="sa-modelo" name="modelo" data-obrigatorio></select>' +
+                '<div class="field__linha">' +
+                  '<select class="select" id="sa-modelo" name="modelo" data-obrigatorio></select>' +
+                  (CELAB.auth.permissao('podeGerenciarListas')
+                    ? '<button type="button" class="field__gerenciar" data-gerenciar-lista="modelos" ' +
+                      'data-alvo-campo="sa-modelo" title="Gerenciar modelos" ' +
+                      'aria-label="Gerenciar modelos">' + UI.icone('engrenagem', 15) + '</button>'
+                    : '') +
+                '</div>' +
                 '<span class="field__error">Selecione o modelo.</span>' +
               '</div>' +
 
               '<div class="field">' +
-                '<label for="sa-predio">Prédio de destino <span class="req">*</span></label>' +
-                '<select class="select" id="sa-predio" name="predioDestino" data-obrigatorio>' +
-                  UI.opcoes(CELAB.PREDIOS) + '</select>' +
-                '<span class="field__error">Selecione o prédio de destino.</span>' +
-              '</div>' +
-
-              '<div class="field">' +
-                '<label for="sa-setor">Setor / Unidade de destino</label>' +
-                '<input class="input" type="text" id="sa-setor" name="setorDestino" ' +
-                  'placeholder="Ex.: 2ª Vara Criminal" list="lista-setores-saida">' +
-                '<datalist id="lista-setores-saida"></datalist>' +
+                '<label for="sa-status">Status <span class="req">*</span></label>' +
+                UI.selectGerenciavel({
+                  id: 'sa-status', name: 'status', lista: 'status',
+                  opcoesLista: L.statusDe('saida'), valor: 'Solicitação',
+                  obrigatorio: true, placeholder: 'Selecione…'
+                }) +
+                '<span class="field__help" id="sa-desc-status"></span>' +
+                '<span class="field__error">Selecione o motivo da saída.</span>' +
               '</div>' +
 
               '<div class="field">' +
                 '<label for="sa-ttr">TTR <span class="req">*</span></label>' +
-                '<select class="select" id="sa-ttr" name="ttr" data-obrigatorio>' +
-                  UI.opcoes(CELAB.TTR, 'Pendente', false) + '</select>' +
+                UI.selectGerenciavel({
+                  id: 'sa-ttr', name: 'ttr', lista: 'ttrSaida',
+                  valor: 'Pendente', obrigatorio: true, placeholder: 'Selecione…'
+                }) +
+                '<span class="field__error">Informe a situação do TTR.</span>' +
+              '</div>' +
+
+              '<div class="field">' +
+                '<label for="sa-predio">Prédio de destino <span class="req">*</span></label>' +
+                UI.selectGerenciavel({
+                  id: 'sa-predio', name: 'predioDestino', lista: 'predios', obrigatorio: true
+                }) +
+                '<span class="field__error">Selecione o prédio de destino.</span>' +
+              '</div>' +
+
+              '<div class="field">' +
+                '<label for="sa-setor">Setor / Unidade de destino <span class="req">*</span></label>' +
+                UI.selectGerenciavel({
+                  id: 'sa-setor', name: 'setorDestino', lista: 'setores', obrigatorio: true
+                }) +
+                '<span class="field__error">Selecione o setor ou unidade de destino.</span>' +
+              '</div>' +
+
+              '<div class="field">' +
+                '<label for="sa-tecnico">Técnico responsável <span class="req">*</span></label>' +
+                UI.selectGerenciavel({
+                  id: 'sa-tecnico', name: 'tecnico', lista: 'tecnicos',
+                  obrigatorio: true, placeholder: 'Selecione o técnico…'
+                }) +
+                '<span class="field__error">Informe o técnico responsável pela saída.</span>' +
               '</div>' +
 
               '<div class="field field--full">' +
@@ -147,6 +182,7 @@
   function desenharRecentes(container) {
     var lista = saidas().slice(0, 20);
     var alvo = container.querySelector('#saida-recentes');
+    if (!alvo) return;
 
     if (!lista.length) {
       alvo.innerHTML = UI.estadoVazio('Nenhuma saída registrada',
@@ -156,8 +192,9 @@
 
     var html = '<table class="table"><thead><tr>' +
       '<th>Data</th><th>Chamado</th><th>Equipamento</th><th>Modelo</th>' +
-      '<th>Tombo Novo</th><th>Tombo Antigo</th><th>Prédio de destino</th>' +
-      '<th>Setor</th><th>TTR</th><th>Registrado por</th>' +
+      '<th>Tombo Novo</th><th>Tombo Antigo</th><th>Status</th>' +
+      '<th>Prédio de destino</th><th>Setor / Unidade</th>' +
+      '<th>Técnico</th><th>TTR</th><th>Registrado por</th>' +
       '</tr></thead><tbody>';
 
     lista.forEach(function (m) {
@@ -168,8 +205,10 @@
         '<td>' + U.esc(m.modelo || '—') + '</td>' +
         '<td class="num tombo">' + (m.tomboNovo ? U.esc(m.tomboNovo) : '<span class="muted">—</span>') + '</td>' +
         '<td class="num tombo">' + (m.tomboAntigo ? U.esc(m.tomboAntigo) : '<span class="muted">—</span>') + '</td>' +
+        '<td>' + UI.chipStatus(m.statusResultante) + '</td>' +
         '<td>' + U.esc(m.predio || '—') + '</td>' +
         '<td>' + U.esc(m.setor || '—') + '</td>' +
+        '<td>' + (m.tecnico ? U.esc(m.tecnico) : '<span class="muted">—</span>') + '</td>' +
         '<td>' + UI.tagTTR(m.ttr) + '</td>' +
         '<td class="muted">' + U.esc(m.usuario || '—') + '</td>' +
       '</tr>';
@@ -178,31 +217,16 @@
     alvo.innerHTML = html + '</tbody></table>';
   }
 
-  /** Preenche o datalist com os tombos que ainda estão no laboratório. */
+  /** Datalist com os tombos que ainda estão no laboratório. */
   function atualizarSugestoes(container) {
-    var noLab = CELAB.store.estoqueLaboratorio();
-
-    var dlTombos = container.querySelector('#lista-tombos');
-    if (dlTombos) {
-      dlTombos.innerHTML = noLab.map(function (e) {
-        var t = e.tomboNovo || e.tomboAntigo;
-        if (!t) return '';
-        return '<option value="' + U.esc(t) + '">' +
-          U.esc(e.equipamento + ' · ' + e.modelo) + '</option>';
-      }).join('');
-    }
-
-    var vistos = {};
-    CELAB.store.listarEquipamentos().forEach(function (e) {
-      if (e.setorOrigem) vistos[e.setorOrigem] = true;
-      if (e.setorDestino) vistos[e.setorDestino] = true;
-    });
-    var dlSetores = container.querySelector('#lista-setores-saida');
-    if (dlSetores) {
-      dlSetores.innerHTML = Object.keys(vistos).sort().map(function (s) {
-        return '<option value="' + U.esc(s) + '"></option>';
-      }).join('');
-    }
+    var dl = container.querySelector('#lista-tombos');
+    if (!dl) return;
+    dl.innerHTML = CELAB.store.estoqueLaboratorio().map(function (e) {
+      var t = e.tomboNovo || e.tomboAntigo;
+      if (!t) return '';
+      return '<option value="' + U.esc(t) + '">' +
+        U.esc(e.equipamento + ' · ' + e.modelo) + '</option>';
+    }).join('');
   }
 
   function montar(container, navegar) {
@@ -211,51 +235,51 @@
     var form = container.querySelector('#form-saida');
     var selEquip = container.querySelector('#sa-equipamento');
     var selModelo = container.querySelector('#sa-modelo');
+    var selStatus = container.querySelector('#sa-status');
+    var descStatus = container.querySelector('#sa-desc-status');
     var tomboNovo = container.querySelector('#sa-tombo-novo');
     var tomboAntigo = container.querySelector('#sa-tombo-antigo');
     var achadoWrap = container.querySelector('#sa-achado-wrap');
     var achado = container.querySelector('#sa-achado');
 
-    UI.ligarEquipamentoModelo(selEquip, selModelo);
+    var repintarModelos = UI.ligarEquipamentoModelo(selEquip, selModelo);
+
+    function mostrarDescStatus() {
+      descStatus.textContent = L.statusMeta(selStatus.value).desc || '';
+    }
+    selStatus.addEventListener('change', mostrarDescStatus);
+    mostrarDescStatus();
 
     /* Localiza o equipamento pelo tombo e preenche o restante do formulário. */
     function localizar() {
       var eq = CELAB.store.acharPorTombo({
         tomboNovo: tomboNovo.value, tomboAntigo: tomboAntigo.value
       });
-
-      if (!eq) {
-        achadoWrap.style.display = 'none';
-        return null;
-      }
+      if (!eq) { achadoWrap.style.display = 'none'; return null; }
 
       function linha(k, v) {
         return '<div class="result-preview__row"><span class="result-preview__k">' + U.esc(k) +
           '</span><span class="result-preview__v">' + v + '</span></div>';
       }
 
-      var jaSaiu = eq.status === 'Disponibilizado';
       achado.innerHTML =
         linha('Equipamento localizado', U.esc(eq.equipamento + ' · ' + eq.modelo)) +
         linha('Situação atual', UI.chipStatus(eq.status)) +
         linha('Origem', U.esc([eq.predioOrigem, eq.setorOrigem].filter(Boolean).join(' · ') || '—')) +
         linha('Entrada em', U.dataBR(eq.dataEntrada)) +
-        (jaSaiu
-          ? linha('Atenção', '<span style="color:var(--status-critical)">Já disponibilizado em ' +
+        (!eq.noLaboratorio
+          ? linha('Atenção', '<span style="color:var(--status-critical)">Já saiu do laboratório em ' +
               U.dataBR(eq.dataSaida) + ' para ' + U.esc(eq.predioDestino || '—') + '</span>')
           : '');
       achadoWrap.style.display = '';
 
-      // Sincroniza categoria e modelo com o cadastro.
       if (eq.equipamento) {
         selEquip.value = eq.equipamento;
         selEquip.dispatchEvent(new Event('change'));
         selModelo.value = eq.modelo || '';
       }
-      if (!container.querySelector('#sa-chamado').value && eq.chamado) {
-        container.querySelector('#sa-chamado').value = eq.chamado;
-      }
-      // Completa o tombo que estiver faltando.
+      var campoChamado = container.querySelector('#sa-chamado');
+      if (!campoChamado.value && eq.chamado) campoChamado.value = eq.chamado;
       if (!tomboNovo.value && eq.tomboNovo) tomboNovo.value = eq.tomboNovo;
       if (!tomboAntigo.value && eq.tomboAntigo) tomboAntigo.value = eq.tomboAntigo;
 
@@ -292,12 +316,14 @@
       }
 
       UI.toast('success', 'Saída registrada',
-        r.equipamento.equipamento + ' · tombo ' + (r.equipamento.tomboNovo || r.equipamento.tomboAntigo) +
-        ' → ' + (r.equipamento.predioDestino || 'destino') + '. Estoque e dashboard atualizados.');
+        r.equipamento.equipamento + ' · tombo ' +
+        (r.equipamento.tomboNovo || r.equipamento.tomboAntigo) + ' → ' +
+        (r.equipamento.predioDestino || 'destino') + '. Estoque e dashboard atualizados.');
 
       form.reset();
       container.querySelector('#sa-data').value = U.hoje();
-      UI.ligarEquipamentoModelo(selEquip, selModelo);
+      repintarModelos = UI.ligarEquipamentoModelo(selEquip, selModelo);
+      mostrarDescStatus();
       achadoWrap.style.display = 'none';
       tomboNovo.focus();
     });
@@ -305,7 +331,8 @@
     form.addEventListener('reset', function () {
       setTimeout(function () {
         container.querySelector('#sa-data').value = U.hoje();
-        UI.ligarEquipamentoModelo(selEquip, selModelo);
+        repintarModelos = UI.ligarEquipamentoModelo(selEquip, selModelo);
+        mostrarDescStatus();
         achadoWrap.style.display = 'none';
         container.querySelectorAll('.field').forEach(function (f) { f.classList.remove('has-error'); });
       }, 0);
@@ -319,25 +346,34 @@
 
       if (acao.getAttribute('data-acao') === 'excel') {
         CELAB.exportar.paraExcel([{
-          nome: 'Saídas',
-          tituloRelatorio: 'CELAB — Saídas de Equipamentos',
-          registros: lista,
-          colunas: CELAB.exportar.COLS_MOV
+          nome: 'Saídas', tituloRelatorio: 'CELAB — Saídas de Equipamentos',
+          registros: lista, colunas: CELAB.exportar.COLS_MOV
         }], 'CELAB_Saidas_' + U.carimbo() + '.xlsx');
       } else {
         CELAB.exportar.paraPDF({
           titulo: 'Saídas de Equipamentos',
           subtitulo: 'Todas as saídas registradas do laboratório',
-          registros: lista,
-          colunas: CELAB.exportar.COLS_MOV
+          registros: lista, colunas: CELAB.exportar.COLS_MOV
         }, 'CELAB_Saidas_' + U.carimbo() + '.pdf');
       }
     });
 
+    function repintarListas() {
+      UI.repintarSelect(selEquip, L.get('equipamentos'), 'Selecione…');
+      UI.repintarSelect(selStatus, L.statusDe('saida'), 'Selecione…');
+      UI.repintarSelect(container.querySelector('#sa-ttr'), L.ttrDe('saida'), 'Selecione…');
+      UI.repintarSelect(container.querySelector('#sa-predio'), L.get('predios'), 'Selecione…');
+      UI.repintarSelect(container.querySelector('#sa-setor'), L.get('setores'), 'Selecione…');
+      UI.repintarSelect(container.querySelector('#sa-tecnico'), L.get('tecnicos'), 'Selecione o técnico…');
+      if (repintarModelos) repintarModelos(true);
+      mostrarDescStatus();
+    }
+
     desenharRecentes(container);
     atualizarSugestoes(container);
 
-    var cancelar = CELAB.store.assinar(function () {
+    var cancelar = CELAB.store.assinar(function (ev) {
+      if (ev && ev.tipo === 'listas') return repintarListas();
       desenharRecentes(container);
       atualizarSugestoes(container);
     });

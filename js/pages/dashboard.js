@@ -1,8 +1,11 @@
 /* ==========================================================================
-   CELAB — Dashboard
+   CELAB — Dashboard com drill-down (cross-filtering)
    --------------------------------------------------------------------------
-   Reassina o store no `montar` e redesenha a cada evento: qualquer entrada,
-   saída ou edição — inclusive vinda de outra aba — repinta os indicadores.
+   Um único objeto `filtro` governa a tela inteira. Toda mudança — vinda do
+   select de modelo, de um clique numa fatia do donut ou numa barra — recalcula
+   os KPIs, os quatro gráficos e as tabelas-gêmeas a partir do MESMO recorte.
+   Nenhum gráfico filtra a si próprio: cada um continua mostrando a distribuição
+   completa da sua dimensão, com a seleção em destaque e o resto recuado.
    ========================================================================== */
 
 (function (CELAB) {
@@ -10,9 +13,78 @@
 
   var UI = CELAB.ui;
   var U = CELAB.util;
+  var L = CELAB.listas;
 
   var titulo = 'Dashboard';
   var subtitulo = 'Visão geral do estoque em tempo real';
+
+  /* ---------- Estado do drill-down ---------------------------------------- */
+
+  var filtro = { modelo: '', tom: '', equipamento: '', predio: '' };
+  // Rótulo exibido -> tom técnico do status. Mantém a UI legível e a regra fiel.
+  var TONS_DONUT = [
+    { rotulo: 'Disponível',   tom: 'good' },
+    { rotulo: 'Em triagem',   tom: 'info' },
+    { rotulo: 'Manutenção',   tom: 'warning' },
+    { rotulo: 'Leilão',       tom: 'serious' },
+    { rotulo: 'Defeito',      tom: 'critical' },
+    { rotulo: 'Sem situação', tom: 'neutral' }
+  ];
+
+  function tomDoRotulo(rotulo) {
+    var m = TONS_DONUT.find(function (t) { return t.rotulo === rotulo; });
+    return m ? m.tom : '';
+  }
+  function rotuloDoTom(tom) {
+    var m = TONS_DONUT.find(function (t) { return t.tom === tom; });
+    return m ? m.rotulo : '';
+  }
+
+  function temFiltro() {
+    return !!(filtro.modelo || filtro.tom || filtro.equipamento || filtro.predio);
+  }
+
+  function limparFiltros() {
+    filtro = { modelo: '', tom: '', equipamento: '', predio: '' };
+  }
+
+  /* ---------- Recorte ------------------------------------------------------
+     `exceto` deixa de aplicar uma dimensão, para cada gráfico mostrar a
+     distribuição completa da sua própria dimensão em vez de uma barra só.
+     ---------------------------------------------------------------------- */
+
+  function recorte(exceto) {
+    return CELAB.store.estoqueLaboratorio().filter(function (e) {
+      if (filtro.modelo && exceto !== 'modelo' && e.modelo !== filtro.modelo) return false;
+      if (filtro.equipamento && exceto !== 'equipamento' && e.equipamento !== filtro.equipamento) return false;
+      if (filtro.predio && exceto !== 'predio' && e.predioOrigem !== filtro.predio) return false;
+      if (filtro.tom && exceto !== 'tom') {
+        if ((L.statusMeta(e.status).tom || 'neutral') !== filtro.tom) return false;
+      }
+      return true;
+    });
+  }
+
+  function agrupar(lista, campo) {
+    var mapa = {};
+    lista.forEach(function (e) {
+      var k = e[campo] || 'Não informado';
+      mapa[k] = (mapa[k] || 0) + 1;
+    });
+    return mapa;
+  }
+
+  function porTom(lista) {
+    var mapa = { good: 0, info: 0, warning: 0, serious: 0, critical: 0, neutral: 0 };
+    lista.forEach(function (e) {
+      var t = L.statusMeta(e.status).tom || 'neutral';
+      if (mapa[t] === undefined) mapa[t] = 0;
+      mapa[t]++;
+    });
+    return mapa;
+  }
+
+  /* ---------- Esqueleto ----------------------------------------------------- */
 
   function esqueleto() {
     return '' +
@@ -24,11 +96,9 @@
         '<div class="page-head__spacer"></div>' +
         '<div class="btn-group">' +
           '<button class="btn btn--outline" data-exportar="excel">' +
-            UI.icone('excel', 16) + '<span>Exportar Geral · Excel</span>' +
-          '</button>' +
+            UI.icone('excel', 16) + '<span>Exportar Geral · Excel</span></button>' +
           '<button class="btn btn--outline" data-exportar="pdf">' +
-            UI.icone('pdf', 16) + '<span>Exportar Geral · PDF</span>' +
-          '</button>' +
+            UI.icone('pdf', 16) + '<span>Exportar Geral · PDF</span></button>' +
         '</div>' +
       '</div>' +
 
@@ -38,14 +108,36 @@
         atalho('relatorios', 'quick-card__icon--doc', 'relatorio', 'Relatórios', 'Histórico completo e filtros') +
       '</div>' +
 
+      // Uma linha de filtro acima de tudo o que ela escopa.
+      '<div class="filter-bar" style="align-items:center">' +
+        '<div class="field field--grow">' +
+          '<label for="dash-modelo">Filtrar por modelo</label>' +
+          '<select class="select" id="dash-modelo">' +
+            UI.opcoes(L.get('modelos'), '', 'Todos os modelos') + '</select>' +
+        '</div>' +
+        '<div class="field">' +
+          '<label for="dash-equip">Equipamento</label>' +
+          '<select class="select" id="dash-equip">' +
+            UI.opcoes(L.get('equipamentos'), '', 'Todos') + '</select>' +
+        '</div>' +
+        '<div class="field">' +
+          '<label for="dash-tom">Situação</label>' +
+          '<select class="select" id="dash-tom">' +
+            UI.opcoes(TONS_DONUT.map(function (t) {
+              return { valor: t.tom, rotulo: t.rotulo };
+            }), '', 'Todas') + '</select>' +
+        '</div>' +
+        '<div style="flex:1 1 100%;min-width:0" id="dash-chips"></div>' +
+      '</div>' +
+
       '<div class="kpi-row" id="dash-kpis"></div>' +
 
       '<div class="chart-grid">' +
         cartaoGrafico('Estoque por tipo de equipamento',
-          'Itens fisicamente no laboratório, do maior para o menor',
+          'Clique em uma barra para filtrar a dashboard por categoria',
           'grafico-tipo', 'tall', 'tipo') +
         cartaoGrafico('Composição do estoque',
-          'Distribuição dos itens no laboratório por situação',
+          'Clique em uma fatia para filtrar por situação',
           'grafico-status', 'tall', 'status') +
       '</div>' +
 
@@ -54,16 +146,16 @@
           'Volume diário de movimentações registradas',
           'grafico-mov', '', 'mov') +
         cartaoGrafico('Prédios de origem',
-          'De onde vieram os equipamentos hoje no laboratório',
+          'Clique em uma barra para filtrar por prédio',
           'grafico-predio', '', 'predio') +
       '</div>';
   }
 
-  function atalho(rota, classeIcone, nomeIcone, titulo, sub) {
+  function atalho(rota, classeIcone, nomeIcone, tit, sub) {
     return '<button class="quick-card" data-ir="' + rota + '">' +
       '<span class="quick-card__icon ' + classeIcone + '">' + UI.icone(nomeIcone, 19) + '</span>' +
       '<span class="quick-card__text">' +
-        '<span class="quick-card__title">' + U.esc(titulo) + '</span>' +
+        '<span class="quick-card__title">' + U.esc(tit) + '</span>' +
         '<span class="quick-card__sub">' + U.esc(sub) + '</span>' +
       '</span></button>';
   }
@@ -85,8 +177,6 @@
         '</div>' +
         '<div class="chart-legend" id="legenda-' + chave + '"></div>' +
         '<div class="card__body">' +
-          // data-canvas/data-rotulo permitem recriar o canvas depois de um
-          // estado vazio — ver charts.obterCanvas().
           '<div class="chart-box' + (altura === 'tall' ? ' chart-box--tall' : '') + '" ' +
             'data-vista-alvo="grafico" data-chave="' + chave + '" ' +
             'data-canvas="' + id + '" data-rotulo="' + U.esc(tit) + '">' +
@@ -97,9 +187,40 @@
       '</figure>';
   }
 
+  /* ---------- Chips de filtro ativo ----------------------------------------- */
+
+  function chipsHTML() {
+    if (!temFiltro()) {
+      return '<div style="font-size:12px;color:var(--text-muted);padding-top:2px">' +
+        'Nenhum filtro ativo — clique nas barras ou nas fatias dos gráficos para investigar.' +
+        '</div>';
+    }
+
+    var partes = [];
+    function chip(dim, rotulo, valor) {
+      partes.push('<button type="button" class="chip chip--tom-info" data-remover="' + dim + '" ' +
+        'title="Remover este filtro" style="cursor:pointer;border-style:solid">' +
+        '<span class="chip__dot"></span>' + U.esc(rotulo) + ': <strong>' + U.esc(valor) +
+        '</strong> <span aria-hidden="true" style="opacity:.65;margin-left:2px">&times;</span>' +
+        '<span class="sr-only">Remover filtro</span></button>');
+    }
+
+    if (filtro.modelo) chip('modelo', 'Modelo', filtro.modelo);
+    if (filtro.equipamento) chip('equipamento', 'Equipamento', filtro.equipamento);
+    if (filtro.tom) chip('tom', 'Situação', rotuloDoTom(filtro.tom));
+    if (filtro.predio) chip('predio', 'Prédio', filtro.predio);
+
+    return '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;padding-top:2px">' +
+      '<span style="font-size:12px;color:var(--text-secondary)">Filtros ativos:</span>' +
+      partes.join('') +
+      '<button type="button" class="btn btn--ghost btn--sm" data-limpar-dash>' +
+        UI.icone('limpar', 14) + '<span>Limpar tudo</span></button>' +
+      '</div>';
+  }
+
   /* ---------- KPIs ---------------------------------------------------------- */
 
-  function kpisHTML(r) {
+  function kpisHTML(lista, tons) {
     function tile(classe, rotulo, valor, rodape, hero) {
       return '<div class="stat ' + classe + (hero ? ' stat--hero' : '') + '">' +
         '<div class="stat__label"><span class="dot"></span>' + U.esc(rotulo) + '</div>' +
@@ -108,79 +229,152 @@
         '</div>';
     }
 
-    var s = r.porStatus;
-    // Um hero por tela (o total no laboratório), seguido dos quatro estados
-    // de saúde. "Disponibilizado" não é estado de saúde nem está no
-    // laboratório — vai no rodapé do hero, não como um quinto tile.
+    var totalGeral = CELAB.store.estoqueLaboratorio().length;
+    var rodapeHero = temFiltro()
+      ? 'de ' + U.numero(totalGeral) + ' no laboratório · recorte filtrado'
+      : U.numero(CELAB.store.resumo().totalCadastrado) + ' cadastrados · ' +
+        U.numero(CELAB.store.resumo().totalFora) + ' fora do laboratório';
+
     return '' +
-      tile('stat--brand', 'Equipamentos no laboratório', r.totalNoLab,
-        U.numero(r.totalCadastrado) + ' cadastrados · ' +
-        U.numero(s['Disponibilizado'] || 0) + ' já disponibilizados', true) +
-      tile('stat--good', 'Disponíveis em estoque', s['Estoque'] || 0, 'Prontos para disponibilização') +
-      tile('stat--warning', 'Em manutenção', s['Manutenção'] || 0, 'Em reparo no laboratório') +
-      tile('stat--critical', 'Com defeito', s['Defeito'] || 0, 'Aguardando destinação') +
-      tile('stat--serious', 'Para leilão', s['Leilão'] || 0, 'Baixados do patrimônio ativo');
+      tile('stat--brand', temFiltro() ? 'Equipamentos no recorte' : 'Equipamentos no laboratório',
+        lista.length, rodapeHero, true) +
+      tile('stat--good', 'Disponíveis em estoque', tons.good || 0, 'Prontos para disponibilização') +
+      tile('stat--warning', 'Em manutenção', tons.warning || 0, 'Em reparo no laboratório') +
+      tile('stat--critical', 'Com defeito', tons.critical || 0, 'Aguardando destinação') +
+      tile('stat--serious', 'Para leilão', tons.serious || 0, 'Baixados do patrimônio ativo');
   }
 
   /* ---------- Render -------------------------------------------------------- */
 
   function desenhar(container) {
-    var r = CELAB.store.resumo();
-    var serie = CELAB.store.serieMovimentacoes(30);
     var p = CELAB.charts.paleta();
+    var todasCategorias = L.get('equipamentos');
 
-    container.querySelector('#dash-kpis').innerHTML = kpisHTML(r);
+    // Recorte principal (todos os filtros) e recortes por dimensão.
+    var base = recorte();
+    var listaTipo = recorte('equipamento');   // barras de tipo: sem o filtro de tipo
+    var listaStatus = recorte('tom');         // donut: sem o filtro de situação
+    var listaPredio = recorte('predio');      // prédios: sem o filtro de prédio
+
+    /* --- cabeçalho, chips e KPIs --- */
     container.querySelector('#dash-atualizado').textContent =
-      'Atualizado às ' + new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+      'Atualizado às ' + new Date().toLocaleTimeString('pt-BR',
+        { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    container.querySelector('#dash-chips').innerHTML = chipsHTML();
+    container.querySelector('#dash-kpis').innerHTML = kpisHTML(base, porTom(base));
 
-    /* --- por tipo (barras, série única) --- */
-    CELAB.charts.barrasPorTipo('grafico-tipo', r.porTipo);
-    container.querySelector('#legenda-tipo').innerHTML = ''; // série única não leva legenda
-    preencherTabela(container, 'tipo',
-      ['Equipamento', 'Quantidade'],
-      Object.keys(r.porTipo).sort(function (a, b) { return r.porTipo[b] - r.porTipo[a]; })
-        .map(function (k) { return [{ texto: k, cor: p.series[0] }, U.numero(r.porTipo[k])]; })
-    );
+    /* --- 1. Estoque por tipo (clicável) --- */
+    var dadosTipo = agrupar(listaTipo, 'equipamento');
+    CELAB.charts.barrasPorTipo('grafico-tipo', dadosTipo, {
+      todasCategorias: todasCategorias,   // mostra as 14, inclusive as zeradas
+      selecionado: filtro.equipamento,
+      aoClicar: function (categoria) {
+        filtro.equipamento = (categoria && categoria !== filtro.equipamento) ? categoria : '';
+        sincronizarCampos(container);
+        desenhar(container);
+      }
+    });
+    container.querySelector('#legenda-tipo').innerHTML = filtro.tom
+      ? '<span class="chart-legend__item" style="color:var(--text-secondary)">' +
+        'Mostrando apenas equipamentos com situação <strong style="color:var(--text-primary)">' +
+        U.esc(rotuloDoTom(filtro.tom)) + '</strong></span>'
+      : '';
+    preencherTabela(container, 'tipo', ['Equipamento', 'Quantidade'],
+      todasCategorias
+        .map(function (c) { return { rotulo: c, valor: dadosTipo[c] || 0 }; })
+        .sort(function (a, b) {
+          return b.valor - a.valor || a.rotulo.localeCompare(b.rotulo, 'pt-BR');
+        })
+        .map(function (i) { return [{ texto: i.rotulo, cor: p.series[0] }, U.numero(i.valor)]; }));
 
-    /* --- por status (donut, paleta de status) --- */
-    CELAB.charts.donutStatus('grafico-status', r.porStatus);
-    var statusItens = [
-      { rotulo: 'Estoque',    cor: p.status.good,     valor: r.porStatus['Estoque'] || 0 },
-      { rotulo: 'Manutenção', cor: p.status.warning,  valor: r.porStatus['Manutenção'] || 0 },
-      { rotulo: 'Leilão',     cor: p.status.serious,  valor: r.porStatus['Leilão'] || 0 },
-      { rotulo: 'Defeito',    cor: p.status.critical, valor: r.porStatus['Defeito'] || 0 }
-    ];
-    container.querySelector('#legenda-status').innerHTML = CELAB.charts.legendaHTML(statusItens);
-    preencherTabela(container, 'status',
-      ['Situação', 'Quantidade'],
-      statusItens.map(function (i) { return [{ texto: i.rotulo, cor: i.cor }, U.numero(i.valor)]; })
-        .concat([[{ texto: 'Disponibilizado (fora do laboratório)', cor: p.status.neutral },
-                  U.numero(r.porStatus['Disponibilizado'] || 0)]])
-    );
+    /* --- 2. Composição por situação (donut clicável) --- */
+    var tonsStatus = porTom(listaStatus);
+    var fatias = TONS_DONUT.map(function (t) {
+      return {
+        rotulo: t.rotulo,
+        cor: t.tom === 'info' ? p.series[0] : (p.status[t.tom] || p.status.neutral),
+        valor: tonsStatus[t.tom] || 0
+      };
+    }).filter(function (f) { return f.valor > 0; });
 
-    /* --- movimentações (2 séries, legenda obrigatória) --- */
+    CELAB.charts.donutStatus('grafico-status', fatias, {
+      selecionado: rotuloDoTom(filtro.tom),
+      rotuloCentro: temFiltro() ? 'no recorte' : 'no laboratório',
+      aoClicar: function (rotulo) {
+        var tom = tomDoRotulo(rotulo);
+        filtro.tom = (tom && tom !== filtro.tom) ? tom : '';
+        sincronizarCampos(container);
+        desenhar(container);
+      }
+    });
+    container.querySelector('#legenda-status').innerHTML = CELAB.charts.legendaHTML(fatias);
+
+    // A tabela-gêmea detalha status por status — nada fica só no agrupamento.
+    var porStatus = agrupar(listaStatus, 'status');
+    preencherTabela(container, 'status', ['Status', 'Quantidade'],
+      Object.keys(porStatus)
+        .sort(function (a, b) { return porStatus[b] - porStatus[a]; })
+        .map(function (s) {
+          var meta = L.statusMeta(s);
+          var cor = meta.tom === 'info' ? p.series[0] : (p.status[meta.tom] || p.status.neutral);
+          return [{ texto: s, cor: cor }, U.numero(porStatus[s])];
+        }));
+
+    /* --- 3. Movimentações (segue o filtro de modelo/equipamento) --- */
+    var serie = serieFiltrada(30);
     CELAB.charts.linhasMovimentacao('grafico-mov', serie);
-    var totalEnt = serie.entradas.reduce(function (a, b) { return a + b; }, 0);
-    var totalSai = serie.saidas.reduce(function (a, b) { return a + b; }, 0);
     container.querySelector('#legenda-mov').innerHTML = CELAB.charts.legendaHTML([
-      { rotulo: 'Entradas', cor: p.series[0], valor: totalEnt },
-      { rotulo: 'Saídas',   cor: p.series[1], valor: totalSai }
+      { rotulo: 'Entradas', cor: p.series[0],
+        valor: serie.entradas.reduce(function (a, b) { return a + b; }, 0) },
+      { rotulo: 'Saídas', cor: p.series[1],
+        valor: serie.saidas.reduce(function (a, b) { return a + b; }, 0) }
     ]);
-    preencherTabela(container, 'mov',
-      ['Data', 'Entradas', 'Saídas'],
+    preencherTabela(container, 'mov', ['Data', 'Entradas', 'Saídas'],
       serie.labels.map(function (iso, i) {
         return [U.dataBR(iso), U.numero(serie.entradas[i]), U.numero(serie.saidas[i])];
-      }).filter(function (l) { return l[1] !== '0' || l[2] !== '0'; }).reverse()
-    );
+      }).filter(function (l) { return l[1] !== '0' || l[2] !== '0'; }).reverse());
 
-    /* --- prédios --- */
-    CELAB.charts.barrasPorPredio('grafico-predio', r.porPredio, 8);
+    /* --- 4. Prédios (clicável) --- */
+    var dadosPredio = agrupar(listaPredio, 'predioOrigem');
+    CELAB.charts.barrasPorPredio('grafico-predio', dadosPredio, 8, {
+      selecionado: filtro.predio,
+      aoClicar: function (predio) {
+        filtro.predio = (predio && predio !== filtro.predio) ? predio : '';
+        desenhar(container);
+      }
+    });
     container.querySelector('#legenda-predio').innerHTML = '';
-    preencherTabela(container, 'predio',
-      ['Prédio de origem', 'Quantidade'],
-      Object.keys(r.porPredio).sort(function (a, b) { return r.porPredio[b] - r.porPredio[a]; })
-        .map(function (k) { return [{ texto: k, cor: p.series[0] }, U.numero(r.porPredio[k])]; })
-    );
+    preencherTabela(container, 'predio', ['Prédio de origem', 'Quantidade'],
+      Object.keys(dadosPredio)
+        .sort(function (a, b) { return dadosPredio[b] - dadosPredio[a]; })
+        .map(function (k) { return [{ texto: k, cor: p.series[0] }, U.numero(dadosPredio[k])]; }));
+  }
+
+  /** Série de movimentações respeitando modelo e equipamento do filtro. */
+  function serieFiltrada(dias) {
+    if (!filtro.modelo && !filtro.equipamento) return CELAB.store.serieMovimentacoes(dias);
+
+    var hoje = new Date();
+    hoje.setHours(0, 0, 0, 0);
+    var labels = [], mapa = {};
+    for (var i = dias - 1; i >= 0; i--) {
+      var iso = new Date(hoje.getTime() - i * 86400000).toISOString().slice(0, 10);
+      labels.push(iso);
+      mapa[iso] = { entradas: 0, saidas: 0 };
+    }
+    CELAB.store.listarMovimentacoes().forEach(function (m) {
+      if (filtro.modelo && m.modelo !== filtro.modelo) return;
+      if (filtro.equipamento && m.equipamento !== filtro.equipamento) return;
+      var k = (m.data || '').slice(0, 10);
+      if (!mapa[k]) return;
+      if (m.tipo === 'ENTRADA') mapa[k].entradas++;
+      else if (m.tipo === 'SAIDA') mapa[k].saidas++;
+    });
+    return {
+      labels: labels,
+      entradas: labels.map(function (l) { return mapa[l].entradas; }),
+      saidas: labels.map(function (l) { return mapa[l].saidas; })
+    };
   }
 
   function preencherTabela(container, chave, colunas, linhas) {
@@ -191,44 +385,116 @@
       : '<div style="padding:28px;text-align:center;color:var(--text-muted);font-size:13px">Sem dados.</div>';
   }
 
+  /** Mantém os selects em sincronia com os cliques nos gráficos. */
+  function sincronizarCampos(container) {
+    var m = container.querySelector('#dash-modelo');
+    var e = container.querySelector('#dash-equip');
+    var t = container.querySelector('#dash-tom');
+    if (m) m.value = filtro.modelo;
+    if (e) e.value = filtro.equipamento;
+    if (t) t.value = filtro.tom;
+  }
+
   /* ---------- Montagem ------------------------------------------------------ */
 
   function montar(container, navegar) {
     container.innerHTML = esqueleto();
+    sincronizarCampos(container);
+
+    var CAMPOS = [['#dash-modelo', 'modelo'], ['#dash-equip', 'equipamento'], ['#dash-tom', 'tom']];
+
+    CAMPOS.forEach(function (par) {
+      var el = container.querySelector(par[0]);
+      if (!el) return;
+      el.addEventListener('change', function () {
+        filtro[par[1]] = this.value;
+        desenhar(container);
+      });
+    });
 
     container.addEventListener('click', function (e) {
-      var ir = e.target.closest('[data-ir]');
-      if (ir) return navegar(ir.getAttribute('data-ir'));
+      var alvo;
 
-      var exp = e.target.closest('[data-exportar]');
-      if (exp) {
-        if (exp.getAttribute('data-exportar') === 'excel') CELAB.exportar.exportarGeralExcel();
+      if ((alvo = e.target.closest('[data-remover]'))) {
+        filtro[alvo.getAttribute('data-remover')] = '';
+        sincronizarCampos(container);
+        return desenhar(container);
+      }
+
+      if (e.target.closest('[data-limpar-dash]')) {
+        limparFiltros();
+        sincronizarCampos(container);
+        return desenhar(container);
+      }
+
+      if ((alvo = e.target.closest('[data-ir]'))) return navegar(alvo.getAttribute('data-ir'));
+
+      if ((alvo = e.target.closest('[data-exportar]'))) {
+        if (alvo.getAttribute('data-exportar') === 'excel') CELAB.exportar.exportarGeralExcel();
         else CELAB.exportar.exportarGeralPDF();
         return;
       }
 
-      var vista = e.target.closest('[data-vista]');
-      if (vista) {
-        var chave = vista.getAttribute('data-alvo');
-        var modo = vista.getAttribute('data-vista');
-        var grupo = vista.parentElement;
-        grupo.querySelectorAll('button').forEach(function (b) { b.classList.remove('is-active'); });
-        vista.classList.add('is-active');
+      if ((alvo = e.target.closest('[data-vista]'))) {
+        var chave = alvo.getAttribute('data-alvo');
+        var modo = alvo.getAttribute('data-vista');
+        alvo.parentElement.querySelectorAll('button').forEach(function (b) {
+          b.classList.remove('is-active');
+        });
+        alvo.classList.add('is-active');
         container.querySelectorAll('[data-vista-alvo][data-chave="' + chave + '"]').forEach(function (painel) {
           painel.classList.toggle('hidden', painel.getAttribute('data-vista-alvo') !== modo);
         });
       }
     });
 
+    // Esc limpa o drill-down — saída rápida de qualquer recorte.
+    function aoTeclar(ev) {
+      if (ev.key !== 'Escape' || !temFiltro()) return;
+      if (document.querySelector('.modal-backdrop')) return;   // o modal tem prioridade
+      limparFiltros();
+      sincronizarCampos(container);
+      desenhar(container);
+    }
+    document.addEventListener('keydown', aoTeclar);
+
     desenhar(container);
 
-    // Tempo real: qualquer mutação do store repinta a dashboard inteira.
-    var cancelar = CELAB.store.assinar(function () { desenhar(container); });
+    /** Repinta os selects quando as listas mudam. */
+    function repintarListas() {
+      UI.repintarSelect(container.querySelector('#dash-modelo'), L.get('modelos'), 'Todos os modelos');
+      UI.repintarSelect(container.querySelector('#dash-equip'), L.get('equipamentos'), 'Todos');
+      // Um modelo excluído deixa de existir: o filtro correspondente cai.
+      if (filtro.modelo && L.get('modelos').indexOf(filtro.modelo) === -1) filtro.modelo = '';
+      if (filtro.equipamento && L.get('equipamentos').indexOf(filtro.equipamento) === -1) filtro.equipamento = '';
+      sincronizarCampos(container);
+      desenhar(container);
+    }
 
-    return { destruir: function () { cancelar(); CELAB.charts.destruirTodos(); } };
+    // Tempo real: qualquer mutação repinta a dashboard mantendo o recorte.
+    var cancelar = CELAB.store.assinar(function (ev) {
+      if (ev && ev.tipo === 'listas') return repintarListas();
+      desenhar(container);
+    });
+
+    return {
+      destruir: function () {
+        cancelar();
+        document.removeEventListener('keydown', aoTeclar);
+        CELAB.charts.destruirTodos();
+      }
+    };
   }
 
   CELAB.pages = CELAB.pages || {};
-  CELAB.pages.dashboard = { titulo: titulo, subtitulo: subtitulo, montar: montar };
+  CELAB.pages.dashboard = {
+    titulo: titulo,
+    subtitulo: subtitulo,
+    montar: montar,
+    // expostos para os testes
+    _filtro: function () { return filtro; },
+    _recorte: recorte,
+    _limpar: limparFiltros
+  };
 
 })(window.CELAB);

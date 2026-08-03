@@ -18,15 +18,17 @@
     { chave: 'modelo',            titulo: 'Modelo',           largura: 28 },
     { chave: 'tomboNovo',         titulo: 'Tombo Novo',       largura: 14 },
     { chave: 'tomboAntigo',       titulo: 'Tombo Antigo',     largura: 14 },
-    { chave: 'status',            titulo: 'Status',           largura: 16 },
+    { chave: 'status',            titulo: 'Status',           largura: 20 },
+    { chave: 'noLaboratorio',     titulo: 'No Laboratório',   largura: 14, tipo: 'sim/nao' },
     { chave: 'chamado',           titulo: 'Chamado',          largura: 13 },
     { chave: 'dataEntrada',       titulo: 'Data de Entrada',  largura: 15, tipo: 'data' },
     { chave: 'predioOrigem',      titulo: 'Prédio de Origem', largura: 30 },
-    { chave: 'setorOrigem',       titulo: 'Setor/Unidade',    largura: 22 },
+    { chave: 'setorOrigem',       titulo: 'Setor/Unidade',    largura: 38 },
     { chave: 'dataSaida',         titulo: 'Data de Saída',    largura: 15, tipo: 'data' },
     { chave: 'predioDestino',     titulo: 'Prédio de Destino',largura: 30 },
-    { chave: 'setorDestino',      titulo: 'Setor de Destino', largura: 22 },
-    { chave: 'ttr',               titulo: 'TTR',              largura: 12 },
+    { chave: 'setorDestino',      titulo: 'Setor de Destino', largura: 38 },
+    { chave: 'tecnico',           titulo: 'Técnico Responsável', largura: 20 },
+    { chave: 'ttr',               titulo: 'TTR',              largura: 16 },
     { chave: 'servicoSolicitado', titulo: 'Serviço Solicitado', largura: 46 }
   ];
 
@@ -38,11 +40,12 @@
     { chave: 'modelo',            titulo: 'Modelo',           largura: 28 },
     { chave: 'tomboNovo',         titulo: 'Tombo Novo',       largura: 14 },
     { chave: 'tomboAntigo',       titulo: 'Tombo Antigo',     largura: 14 },
-    { chave: 'statusAnterior',    titulo: 'Status Anterior',  largura: 16 },
-    { chave: 'statusResultante',  titulo: 'Status Atual',     largura: 16 },
+    { chave: 'statusAnterior',    titulo: 'Status Anterior',  largura: 20 },
+    { chave: 'statusResultante',  titulo: 'Status Atual',     largura: 20 },
     { chave: 'predio',            titulo: 'Prédio',           largura: 30 },
-    { chave: 'setor',             titulo: 'Setor/Unidade',    largura: 22 },
-    { chave: 'ttr',               titulo: 'TTR',              largura: 12 },
+    { chave: 'setor',             titulo: 'Setor/Unidade',    largura: 38 },
+    { chave: 'tecnico',           titulo: 'Técnico Responsável', largura: 20 },
+    { chave: 'ttr',               titulo: 'TTR',              largura: 16 },
     { chave: 'usuario',           titulo: 'Usuário',          largura: 14 },
     { chave: 'servicoSolicitado', titulo: 'Serviço Solicitado', largura: 46 },
     { chave: 'observacao',        titulo: 'Observação',       largura: 40 }
@@ -54,6 +57,7 @@
       var v = registro[c.chave];
       if (c.tipo === 'data') return v ? U.dataBR(v) : '';
       if (c.tipo === 'tipoMov') return CELAB.tipoMovMeta(v).rotulo;
+      if (c.tipo === 'sim/nao') return v ? 'Sim' : 'Não';
       return v == null || v === '' ? '' : String(v);
     });
   }
@@ -285,15 +289,17 @@
 
   /* ---------- Atalhos de alto nível ----------------------------------------- */
 
+  /* Mede pelo TOM de cada status, não pelo rótulo: as listas são editáveis,
+     então um status novo criado pelo usuário já entra no resumo certo. */
   function resumoParaExport() {
     var r = CELAB.store.resumo();
     return [
       ['Total no laboratório', r.totalNoLab],
-      ['Em estoque',           r.porStatus['Estoque'] || 0],
-      ['Em manutenção',        r.porStatus['Manutenção'] || 0],
-      ['Com defeito',          r.porStatus['Defeito'] || 0],
-      ['Para leilão',          r.porStatus['Leilão'] || 0],
-      ['Disponibilizados',     r.porStatus['Disponibilizado'] || 0]
+      ['Disponíveis',         r.porTom.good || 0],
+      ['Em manutenção',       r.porTom.warning || 0],
+      ['Com defeito',         r.porTom.critical || 0],
+      ['Para leilão',         r.porTom.serious || 0],
+      ['Fora do laboratório', r.totalFora]
     ];
   }
 
@@ -305,6 +311,9 @@
 
     var porTipo = Object.keys(r.porTipo).sort().map(function (k) {
       return { equipamento: k, quantidade: r.porTipo[k] };
+    });
+    var porSetor = Object.keys(r.porSetor).sort().map(function (k) {
+      return { setor: k, quantidade: r.porSetor[k] };
     });
 
     paraExcel([
@@ -328,6 +337,15 @@
         colunas: [
           { chave: 'equipamento', titulo: 'Equipamento', largura: 28 },
           { chave: 'quantidade',  titulo: 'Quantidade',  largura: 14 }
+        ]
+      },
+      {
+        nome: 'Resumo por setor',
+        tituloRelatorio: 'CELAB — Estoque do laboratório por setor de origem',
+        registros: porSetor,
+        colunas: [
+          { chave: 'setor',      titulo: 'Setor / Unidade', largura: 46 },
+          { chave: 'quantidade', titulo: 'Quantidade',      largura: 14 }
         ]
       }
     ], 'CELAB_Inventario_Geral_' + U.carimbo() + '.xlsx');

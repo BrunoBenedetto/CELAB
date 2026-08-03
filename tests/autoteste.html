@@ -16,15 +16,19 @@
 
   <script src="../js/config.js"></script>
   <script src="../js/ui.js"></script>
+  <script src="../js/listas.js"></script>
   <script src="../js/store.js"></script>
   <script src="../js/charts.js"></script>
   <script src="../js/export.js"></script>
+  <script src="../js/gerenciador.js"></script>
+  <script src="../js/importar.js"></script>
   <script src="../js/pages/login.js"></script>
   <script src="../js/pages/dashboard.js"></script>
   <script src="../js/pages/estoque.js"></script>
   <script src="../js/pages/entrada.js"></script>
   <script src="../js/pages/saida.js"></script>
   <script src="../js/pages/relatorios.js"></script>
+  <script src="../js/pages/configuracoes.js"></script>
   <script defer src="../js/app.js"></script>
 
   <script>
@@ -59,43 +63,86 @@
         var C = window.CELAB;
         var S = C.store, U = C.util;
 
+        var L = C.listas;
+
         /* ---- 1. Carregamento dos módulos ---- */
-        t('config.js carregou as listas', function () {
-          eq(C.EQUIPAMENTOS.length, 14, 'equipamentos');
-          eq(C.MODELOS.length, 45, 'modelos');
-          eq(C.PREDIOS.length, 32, 'prédios');
-          eq(C.STATUS.length, 5, 'status');
-          return C.EQUIPAMENTOS.length + ' equip · ' + C.MODELOS.length + ' modelos · ' + C.PREDIOS.length + ' prédios';
+        t('listas carregadas com os tamanhos esperados', function () {
+          eq(L.get('equipamentos').length, 14, 'equipamentos');
+          eq(L.get('modelos').length, 45, 'modelos');
+          eq(L.get('predios').length, 32, 'prédios');
+          eq(L.get('setores').length, 175, 'setores');
+          eq(L.get('tecnicos').length, 15, 'técnicos');
+          return '175 setores · 15 técnicos · 45 modelos';
+        });
+
+        t('status por contexto: entrada, saída e estoque', function () {
+          var ent = L.statusDe('entrada'), sai = L.statusDe('saida'), est = L.statusDe('estoque');
+          ['Estoque', 'Manutenção', 'Defeito', 'Leilão', 'Entrada de Estoque', 'Devolução',
+           'Devolução Empréstimo', 'Substituição', 'Substituição Defeito',
+           'Devolucao Defeito', 'Devolução Eq. Obsoleto'].forEach(function (s) {
+            if (ent.indexOf(s) === -1) throw new Error('falta na entrada: ' + s);
+          });
+          ['Solicitação', 'Subs. Equip. Obsoleto', 'Empréstimo', 'Manutenção',
+           'Doação', 'Substituição', 'Subs. Equip. Defeito'].forEach(function (s) {
+            if (sai.indexOf(s) === -1) throw new Error('falta na saída: ' + s);
+          });
+          if (est.indexOf('Disponibilizado') === -1) throw new Error('falta no estoque');
+          return ent.length + ' entrada · ' + sai.length + ' saída · ' + est.length + ' estoque';
+        });
+
+        t('TTR tem lista própria por contexto', function () {
+          eq(L.ttrDe('entrada').join('|'), 'Realizada|Pendente|Retornou|Não consta no GRP|Garantia', 'TTR entrada');
+          eq(L.ttrDe('saida').join('|'), 'Realizada|Pendente|Retornou|Empréstimo|Nao consta no GRP', 'TTR saída');
+          return '5 + 5 opções';
+        });
+
+        t('status não tem rótulo duplicado', function () {
+          var vistos = {};
+          L.get('status').forEach(function (s) {
+            var k = L._chave(s.valor);
+            if (vistos[k]) throw new Error('status duplicado: ' + s.valor);
+            vistos[k] = true;
+          });
+          return L.get('status').length + ' status únicos';
         });
 
         t('todos os módulos expostos', function () {
-          ['util', 'ui', 'store', 'auth', 'charts', 'exportar', 'app', 'pages'].forEach(function (k) {
+          ['util', 'ui', 'listas', 'store', 'auth', 'charts', 'exportar',
+           'gerenciador', 'importar', 'app', 'pages'].forEach(function (k) {
             if (!C[k]) throw new Error('faltando CELAB.' + k);
           });
-          ['login', 'dashboard', 'estoque', 'entrada', 'saida', 'relatorios'].forEach(function (k) {
+          ['login', 'dashboard', 'estoque', 'entrada', 'saida', 'relatorios',
+           'configuracoes'].forEach(function (k) {
             if (!C.pages[k] || typeof C.pages[k].montar !== 'function') throw new Error('página inválida: ' + k);
           });
-          return '6 páginas registradas';
+          return '7 páginas registradas';
         });
 
         t('nenhum modelo fica inacessível no select filtrado', function () {
-          var vistos = {};
-          C.EQUIPAMENTOS.forEach(function (e) {
-            var g = C.modelosDe(e);
-            g.sugeridos.concat(g.outros).forEach(function (m) { vistos[m] = true; });
-            eq(g.sugeridos.length + g.outros.length, C.MODELOS.length, 'total em ' + e);
+          var total = L.get('modelos').length;
+          L.get('equipamentos').forEach(function (e) {
+            var g = L.modelosDe(e);
+            eq(g.sugeridos.length + g.outros.length, total, 'total em ' + e);
           });
-          eq(Object.keys(vistos).length, C.MODELOS.length, 'modelos alcançáveis');
-          return 'todos os 45 modelos alcançáveis em cada categoria';
+          return 'todos os ' + total + ' modelos alcançáveis em cada categoria';
         });
 
         t('todo modelo mapeado existe na lista mestre', function () {
-          Object.keys(C.MODELOS_POR_EQUIPAMENTO).forEach(function (cat) {
-            C.MODELOS_POR_EQUIPAMENTO[cat].forEach(function (m) {
-              if (C.MODELOS.indexOf(m) === -1) throw new Error('modelo fantasma: ' + m + ' em ' + cat);
+          var mapa = C.MODELOS_POR_EQUIPAMENTO;
+          var todos = L.get('modelos');
+          Object.keys(mapa).forEach(function (cat) {
+            mapa[cat].forEach(function (m) {
+              if (todos.indexOf(m) === -1) throw new Error('modelo fantasma: ' + m + ' em ' + cat);
             });
           });
           return true;
+        });
+
+        t('acessos antigos (CELAB.EQUIPAMENTOS…) leem das listas dinâmicas', function () {
+          eq(C.EQUIPAMENTOS.length, L.get('equipamentos').length, 'equipamentos');
+          eq(C.SETORES.length, 175, 'setores');
+          eq(C.TECNICOS.length, 15, 'técnicos');
+          return 'compatibilidade preservada';
         });
 
         /* ---- 2. Utilitários ---- */
@@ -122,8 +169,11 @@
           return eq(soma, r0.totalCadastrado, 'soma dos status');
         });
 
-        t('totalNoLab exclui os disponibilizados', function () {
-          return eq(r0.totalNoLab, r0.totalCadastrado - (r0.porStatus['Disponibilizado'] || 0), 'no laboratório');
+        t('totalNoLab exclui os itens que saíram', function () {
+          // Presença física vem do campo `noLaboratorio`, não de um rótulo:
+          // as saídas do seed usam "Subs. Equip. Defeito" e "Solicitação".
+          eq(r0.totalNoLab, r0.totalCadastrado - r0.totalFora, 'no laboratório');
+          return r0.totalNoLab + ' de ' + r0.totalCadastrado + ' (' + r0.totalFora + ' fora)';
         });
 
         /* ---- 4. Entrada ---- */
@@ -360,9 +410,18 @@
           return 'passos próprios, sem inversão automática';
         });
 
-        t('colunas de exportação estão completas', function () {
-          eq(C.exportar.COLS_ESTOQUE.length, 14, 'colunas do inventário');
-          eq(C.exportar.COLS_MOV.length, 15, 'colunas do histórico');
+        t('colunas de exportação incluem técnico e presença física', function () {
+          eq(C.exportar.COLS_ESTOQUE.length, 16, 'colunas do inventário');
+          eq(C.exportar.COLS_MOV.length, 16, 'colunas do histórico');
+          function tem(cols, chave) {
+            if (!cols.some(function (c) { return c.chave === chave; })) {
+              throw new Error('falta a coluna ' + chave);
+            }
+          }
+          tem(C.exportar.COLS_ESTOQUE, 'tecnico');
+          tem(C.exportar.COLS_ESTOQUE, 'noLaboratorio');
+          tem(C.exportar.COLS_ESTOQUE, 'setorOrigem');
+          tem(C.exportar.COLS_MOV, 'tecnico');
           return C.exportar.COLS_ESTOQUE.length + ' + ' + C.exportar.COLS_MOV.length + ' colunas';
         });
 
@@ -465,7 +524,556 @@
 
         palco.remove();
 
-        /* ---- 12. Erros globais ---- */
+        /* ---- 12. Listas editáveis ---- */
+
+        t('adicionar opção a uma lista de texto', function () {
+          var antes = L.get('setores').length;
+          var r = L.adicionar('setores', '  ZZZ - Setor de Teste  ');
+          if (!r.ok) throw new Error(r.erro);
+          eq(r.valor, 'ZZZ - Setor de Teste', 'normalizou espaços');
+          eq(L.get('setores').length, antes + 1, 'total');
+          return 'adicionado e normalizado';
+        });
+
+        t('duplicata é bloqueada ignorando acento e caixa', function () {
+          if (L.adicionar('setores', 'zzz - setor de teste').ok) throw new Error('aceitou duplicata');
+          if (L.adicionar('tecnicos', 'BRENO SIMAO').ok) throw new Error('aceitou "Breno Simão" repetido');
+          return 'bloqueado nos dois casos';
+        });
+
+        t('excluir opção sem uso funciona', function () {
+          var r = L.excluir('setores', 'ZZZ - Setor de Teste');
+          if (!r.ok) throw new Error(r.erro);
+          if (L.get('setores').indexOf('ZZZ - Setor de Teste') > -1) throw new Error('não removeu');
+          return 'removido';
+        });
+
+        t('excluir opção EM USO é bloqueado com a contagem', function () {
+          var usado = S.listarEquipamentos()[0];
+          var r = L.excluir('equipamentos', usado.equipamento);
+          if (r.ok) throw new Error('permitiu excluir opção em uso');
+          if (!r.emUso) throw new Error('não sinalizou emUso');
+          if (!r.uso.total) throw new Error('contagem de uso zerada');
+          return 'bloqueado: ' + r.uso.total + ' uso(s)';
+        });
+
+        t('renomear reescreve os registros que usavam o valor antigo', function () {
+          L.adicionar('tecnicos', 'Zeca Teste');
+          var eqRef = S.listarEquipamentos()[0];
+          S.atualizarEquipamento(eqRef.id, { tecnico: 'Zeca Teste' });
+
+          var r = L.renomear('tecnicos', 'Zeca Teste', 'Zeca Testado');
+          if (!r.ok) throw new Error(r.erro);
+          if (!r.afetados) throw new Error('nenhum registro reescrito');
+
+          var depois = S.acharPorId(eqRef.id);
+          eq(depois.tecnico, 'Zeca Testado', 'equipamento reescrito');
+          var mov = S.listarMovimentacoes().filter(function (m) { return m.tecnico === 'Zeca Teste'; });
+          eq(mov.length, 0, 'movimentações com o nome antigo');
+          return r.afetados + ' registro(s) reescritos';
+        });
+
+        t('renomear bloqueia colisão com opção existente', function () {
+          if (L.renomear('tecnicos', 'Zeca Testado', 'Axl Henrique').ok) {
+            throw new Error('permitiu colisão');
+          }
+          L.excluir('tecnicos', 'Zeca Testado', { forcar: true });
+          return 'colisão bloqueada';
+        });
+
+        t('criar status novo com tom e presença física', function () {
+          var r = L.adicionar('status', 'Em Testes', {
+            tom: 'info', noLab: true, contextos: ['entrada', 'estoque']
+          });
+          if (!r.ok) throw new Error(r.erro);
+          var meta = L.statusMeta('Em Testes');
+          eq(meta.tom, 'info', 'tom');
+          eq(meta.noLab, true, 'noLab');
+          if (L.statusDe('entrada').indexOf('Em Testes') === -1) throw new Error('não apareceu na entrada');
+          if (L.statusDe('saida').indexOf('Em Testes') > -1) throw new Error('apareceu na saída sem ser pedido');
+          return 'status criado só nos contextos escolhidos';
+        });
+
+        t('status novo entra na contagem da dashboard pelo tom', function () {
+          var r = S.registrarEntrada({
+            dataEntrada: new Date().toISOString().slice(0, 10), tomboNovo: '444001',
+            equipamento: 'Monitor', modelo: 'HP P22A G4', status: 'Em Testes',
+            predioOrigem: 'CSE', setorOrigem: 'OAB', ttr: 'Pendente'
+          });
+          if (!r.ok) throw new Error(r.erro);
+          var res = S.resumo();
+          if (!res.porTom.info) throw new Error('o tom "info" não foi contado');
+          if (res.porStatus['Em Testes'] !== 1) throw new Error('status não contabilizado');
+          return 'tom info = ' + res.porTom.info;
+        });
+
+        t('chip usa o tom do status criado pelo usuário', function () {
+          var html = C.ui.chipStatus('Em Testes');
+          if (html.indexOf('chip--tom-info') === -1) throw new Error('chip sem o tom: ' + html);
+          if (html.indexOf('Em Testes') === -1) throw new Error('chip sem rótulo');
+          return 'cor + rótulo';
+        });
+
+        t('excluir status em uso é bloqueado, forçar preserva o texto', function () {
+          var r = L.excluir('status', 'Em Testes');
+          if (r.ok) throw new Error('permitiu excluir status em uso');
+          var f = L.excluir('status', 'Em Testes', { forcar: true });
+          if (!f.ok) throw new Error(f.erro);
+          eq(S.acharPorTombo({ tomboNovo: '444001' }).status, 'Em Testes', 'texto preservado');
+          // Status fora da lista cai em neutro, sem quebrar a tela.
+          eq(L.statusMeta('Em Testes').tom, 'neutral', 'fallback de tom');
+          return 'bloqueado, e forçado preserva o registro';
+        });
+
+        t('novas opções de fábrica entram em base antiga sem apagar customização', function () {
+          L.adicionar('setores', 'Setor Customizado do Usuário');
+          // Simula uma base gravada sem os status de saída.
+          var salvo = JSON.parse(localStorage.getItem(C.APP.listasKey));
+          salvo.status = salvo.status.filter(function (s) { return s.valor !== 'Doação'; });
+          localStorage.setItem(C.APP.listasKey, JSON.stringify(salvo));
+
+          L.inicializar();
+          if (L.statusDe('saida').indexOf('Doação') === -1) throw new Error('padrão não foi reincorporado');
+          if (L.get('setores').indexOf('Setor Customizado do Usuário') === -1) {
+            throw new Error('customização foi apagada');
+          }
+          L.excluir('setores', 'Setor Customizado do Usuário');
+          return 'merge preserva o que o usuário criou';
+        });
+
+        t('restaurar padrão volta a lista de fábrica', function () {
+          L.adicionar('tecnicos', 'Fulano Temporário');
+          L.restaurarPadrao('tecnicos');
+          eq(L.get('tecnicos').length, 15, 'total');
+          if (L.get('tecnicos').indexOf('Fulano Temporário') > -1) throw new Error('não restaurou');
+          return '15 técnicos de fábrica';
+        });
+
+        t('listas sobrevivem no localStorage e no backup', function () {
+          if (!localStorage.getItem(C.APP.listasKey)) throw new Error('listas não gravadas');
+          var backup = JSON.parse(S.exportarJSON());
+          if (!backup.listas || !backup.listas.setores) throw new Error('backup sem as listas');
+          eq(backup.listas.setores.length, 175, 'setores no backup');
+          return 'gravadas e incluídas no backup';
+        });
+
+        /* ---- 13. Presença física ---- */
+
+        t('presença física é da operação, não do rótulo do status', function () {
+          // "Substituição" existe nos dois contextos com sentidos opostos.
+          var ent = S.registrarEntrada({
+            dataEntrada: new Date().toISOString().slice(0, 10), tomboNovo: '333001',
+            equipamento: 'Monitor', modelo: 'LG E2241PX', status: 'Substituição',
+            predioOrigem: 'CSE', setorOrigem: 'OAB', ttr: 'Pendente'
+          });
+          if (!ent.ok) throw new Error(ent.erro);
+          eq(ent.equipamento.noLaboratorio, true, 'entrada → no laboratório');
+
+          var sai = S.registrarSaida({
+            dataSaida: new Date().toISOString().slice(0, 10), tomboNovo: '333001',
+            equipamento: 'Monitor', modelo: 'LG E2241PX', status: 'Substituição',
+            predioDestino: 'Palácio', setorDestino: 'OAB',
+            ttr: 'Realizada', tecnico: 'Axl Henrique'
+          });
+          if (!sai.ok) throw new Error(sai.erro);
+          eq(sai.equipamento.noLaboratorio, false, 'saída → fora do laboratório');
+          eq(sai.equipamento.status, 'Substituição', 'mesmo rótulo nos dois lados');
+          return 'mesmo status, presença oposta — correto';
+        });
+
+        t('técnico responsável é gravado na saída e no histórico', function () {
+          var eqRef = S.acharPorTombo({ tomboNovo: '333001' });
+          eq(eqRef.tecnico, 'Axl Henrique', 'no equipamento');
+          var mov = S.listarMovimentacoes().find(function (m) {
+            return m.tipo === 'SAIDA' && m.tomboNovo === '333001';
+          });
+          eq(mov.tecnico, 'Axl Henrique', 'na movimentação');
+          return 'gravado nos dois lugares';
+        });
+
+        t('soma dos tons fecha com o total no laboratório', function () {
+          // Se um tom ficar fora do donut, o número do centro discorda do
+          // indicador principal — foi um bug real, este teste o tranca.
+          var res = S.resumo();
+          var soma = 0;
+          Object.keys(res.porTom).forEach(function (k) { soma += res.porTom[k]; });
+          eq(soma, res.totalNoLab, 'soma dos tons');
+          return soma + ' = ' + res.totalNoLab;
+        });
+
+        t('estoqueLaboratorio usa o campo, não o texto do status', function () {
+          var noLab = S.estoqueLaboratorio();
+          if (noLab.some(function (e) { return !e.noLaboratorio; })) {
+            throw new Error('item fora do laboratório entrou no estoque');
+          }
+          var res = S.resumo();
+          eq(res.totalNoLab + res.totalFora, res.totalCadastrado, 'soma');
+          return res.totalNoLab + ' no laboratório de ' + res.totalCadastrado;
+        });
+
+        t('migração deduz noLaboratorio de registros antigos', function () {
+          var antigo = S.listarEquipamentos()[0];
+          delete antigo.noLaboratorio;               // simula base v1
+          antigo.status = 'Disponibilizado';
+          S.importarJSON(S.exportarJSON());          // dispara migrar()
+          var depois = S.acharPorId(antigo.id);
+          eq(depois.noLaboratorio, false, 'Disponibilizado → fora');
+          return 'campo reconstruído';
+        });
+
+        /* ---- 14. Importação de planilha ---- */
+
+        t('CSV é lido com separador e aspas', function () {
+          var m = C.importar._lerCSV(
+            'Equipamento;Modelo;Tombo Novo\r\n' +
+            '"Monitor; especial";LG E2241PX;045999\r\n' +
+            'Nobreak;Ragtech Easy Way 1200;046999\r\n');
+          eq(m.length, 3, 'linhas');
+          eq(m[1][0], 'Monitor; especial', 'campo com separador dentro de aspas');
+          return '3 linhas, aspas respeitadas';
+        });
+
+        t('detecção de colunas reconhece sinônimos', function () {
+          var mapa = C.importar._detectarMapa([
+            'PATRIMÔNIO', 'Marca/Modelo', 'Tipo', 'Situação', 'Setor/Unidade',
+            'Prédio', 'Técnico Responsável', 'TTR', 'Data Entrada'
+          ]);
+          eq(mapa.tomboNovo, 0, 'PATRIMÔNIO → Tombo Novo');
+          eq(mapa.modelo, 1, 'Marca/Modelo → Modelo');
+          eq(mapa.equipamento, 2, 'Tipo → Equipamento');
+          eq(mapa.status, 3, 'Situação → Status');
+          eq(mapa.setorOrigem, 4, 'Setor/Unidade → Setor');
+          eq(mapa.tecnico, 6, 'Técnico → tecnico');
+          return '9 colunas reconhecidas por sinônimo';
+        });
+
+        t('datas e tombos são normalizados', function () {
+          eq(C.importar._paraISO('31/07/2026'), '2026-07-31', 'dd/mm/aaaa');
+          eq(C.importar._paraISO('2026-7-5'), '2026-07-05', 'aaaa-m-d');
+          eq(C.importar._paraISO('31-07-26'), '2026-07-31', 'dd-mm-aa');
+          eq(C.importar._paraISO('texto'), '', 'inválido');
+          eq(C.importar._paraTombo('045112'), '045112', 'zeros à esquerda preservados');
+          eq(C.importar._paraTombo(46001), '46001', 'número');
+          eq(C.importar._paraTombo('46001.00'), '46001', 'decimal do Excel');
+          return 'datas e tombos ok';
+        });
+
+        t('importação cria, ignora duplicata e recusa linha sem tombo', function () {
+          var base = S.resumo().totalCadastrado;
+          var linhas = [
+            { _linha: 2, equipamento: 'Monitor', modelo: 'HP P22A G4', tomboNovo: '900001',
+              status: 'Estoque', predioOrigem: 'Palácio', setorOrigem: 'OAB', ttr: 'Realizada',
+              tecnico: 'Breno Simão', dataEntrada: '2026-07-01' },
+            { _linha: 3, equipamento: 'Nobreak', modelo: 'Ragtech Easy Way 1200', tomboNovo: '900002',
+              status: 'Defeito', predioOrigem: 'CSE', setorOrigem: 'OAB' },
+            { _linha: 4, equipamento: 'Monitor', modelo: 'HP P22A G4', tomboNovo: '900001' },
+            { _linha: 5, equipamento: '', modelo: '', tomboNovo: '', tomboAntigo: '' },
+            { _linha: 6, equipamento: 'Webcam', modelo: 'Logitech C925e', tomboNovo: '' }
+          ];
+
+          var sim = S.importarLinhas(linhas, { simular: true });
+          eq(sim.criados, 2, 'criados na simulação');
+          eq(sim.ignorados, 1, 'ignorados (linha em branco)');
+          eq(sim.recusados, 2, 'recusados (tombo repetido + sem tombo)');
+          eq(S.resumo().totalCadastrado, base, 'simulação NÃO gravou');
+
+          var rel = S.importarLinhas(linhas, {});
+          eq(rel.criados, 2, 'criados de verdade');
+          eq(S.resumo().totalCadastrado, base + 2, 'total após gravar');
+          eq(S.acharPorTombo({ tomboNovo: '900001' }).tecnico, 'Breno Simão', 'técnico importado');
+          return '2 criados · 1 em branco · 2 recusados';
+        });
+
+        t('importação ignora tombo já cadastrado e atualiza quando pedido', function () {
+          var linha = [{ _linha: 2, equipamento: 'Monitor', modelo: 'LG E2241VP',
+            tomboNovo: '900001', status: 'Manutenção', predioOrigem: 'Palácio',
+            setorOrigem: 'OAB' }];
+
+          var r1 = S.importarLinhas(linha, {});
+          eq(r1.ignorados, 1, 'ignorado por padrão');
+          eq(S.acharPorTombo({ tomboNovo: '900001' }).modelo, 'HP P22A G4', 'não sobrescreveu');
+
+          var r2 = S.importarLinhas(linha, { atualizarExistentes: true });
+          eq(r2.atualizados, 1, 'atualizado quando pedido');
+          eq(S.acharPorTombo({ tomboNovo: '900001' }).modelo, 'LG E2241VP', 'sobrescreveu');
+          return 'ignora por padrão, atualiza sob demanda';
+        });
+
+        t('importação cadastra opções novas nas listas', function () {
+          var antesSetores = L.get('setores').length;
+          var rel = S.importarLinhas([{
+            _linha: 2, equipamento: 'Monitor', modelo: 'Modelo Inédito XPTO',
+            tomboNovo: '900500', status: 'Estoque',
+            predioOrigem: 'Prédio Inédito', setorOrigem: 'Setor Inédito da Planilha',
+            tecnico: 'Técnico Inédito', ttr: 'Realizada'
+          }], { criarOpcoes: true });
+
+          eq(rel.criados, 1, 'criado');
+          if (L.get('setores').length <= antesSetores) throw new Error('setor não cadastrado');
+          if (L.get('modelos').indexOf('Modelo Inédito XPTO') === -1) throw new Error('modelo não cadastrado');
+          if (L.get('predios').indexOf('Prédio Inédito') === -1) throw new Error('prédio não cadastrado');
+          if (L.get('tecnicos').indexOf('Técnico Inédito') === -1) throw new Error('técnico não cadastrado');
+          return rel.opcoesCriadas.length + ' opção(ões) cadastradas';
+        });
+
+        t('importação registra a operação no histórico', function () {
+          var mov = S.listarMovimentacoes().find(function (m) { return m.tipo === 'IMPORTACAO'; });
+          if (!mov) throw new Error('sem registro de importação');
+          if (!/criado/.test(mov.observacao)) throw new Error('observação sem o resumo');
+          return 'auditável';
+        });
+
+        t('pipeline completo: XLSX real → detecção → importação', function () {
+          if (typeof XLSX === 'undefined') throw new Error('SheetJS não carregou');
+
+          // Planilha com cabeçalhos "de campo": sinônimos, acentos, ordem trocada
+          // e uma linha de título antes do cabeçalho — como vem do mundo real.
+          var planilha = [
+            ['INVENTÁRIO LABORATÓRIO - JULHO', '', '', '', '', '', ''],
+            ['Marca/Modelo', 'PATRIMÔNIO', 'Tipo', 'Situação', 'Setor/Unidade',
+             'Técnico Responsável', 'Data Entrada'],
+            ['HP Pro M404DW', '070001', 'Impressora', 'Devolução',
+             'VEP - Vara de Execução Penal', 'Hellen Crys', '15/07/2026'],
+            ['Positivo N6440', '070002', 'Notebook', 'Manutenção',
+             'TUR - Turma Recursal', 'Jonas Sousa', '16/07/2026'],
+            ['', '', '', '', '', '', ''],
+            ['LG E2241PX', '', 'Monitor', 'Estoque', 'OAB', 'Fabio Lima', '17/07/2026']
+          ];
+
+          // Escreve e relê como .xlsx de verdade.
+          var wb = XLSX.utils.book_new();
+          XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(planilha), 'Dados');
+          var buf = XLSX.write(wb, { type: 'array', bookType: 'xlsx' });
+          var lido = XLSX.read(buf, { type: 'array' });
+          var matriz = XLSX.utils.sheet_to_json(lido.Sheets['Dados'],
+            { header: 1, raw: false, defval: '', blankrows: false });
+
+          // Detecção na linha 2 (índice 1), como o passo 2 da interface faz.
+          var mapa = C.importar._detectarMapa(matriz[1]);
+          eq(mapa.tomboNovo, 1, 'PATRIMÔNIO detectado');
+          eq(mapa.equipamento, 2, 'Tipo detectado');
+          eq(mapa.tecnico, 5, 'Técnico detectado');
+
+          var linhas = C.importar._montarLinhas(matriz, mapa, 1);
+          var base = S.resumo().totalCadastrado;
+          var rel = S.importarLinhas(linhas, { criarOpcoes: true });
+
+          eq(rel.criados, 2, 'criados (a linha sem tombo é recusada)');
+          eq(rel.recusados, 1, 'recusado por falta de tombo');
+          eq(S.resumo().totalCadastrado, base + 2, 'total gravado');
+
+          var imp = S.acharPorTombo({ tomboNovo: '070001' });
+          eq(imp.equipamento, 'Impressora', 'equipamento');
+          eq(imp.modelo, 'HP Pro M404DW', 'modelo');
+          eq(imp.status, 'Devolução', 'status casou com a lista');
+          eq(imp.tecnico, 'Hellen Crys', 'técnico');
+          eq(imp.setorOrigem, 'VEP - Vara de Execução Penal', 'setor casou com a lista');
+          eq(imp.dataEntrada, '2026-07-15', 'data convertida');
+          eq(imp.noLaboratorio, true, 'entrou no laboratório');
+          return '2 importados de um .xlsx de ' + Math.round(buf.byteLength / 1024) + ' KB';
+        });
+
+        t('montarLinhas respeita o mapa e a linha de cabeçalho', function () {
+          var matriz = [
+            ['relatório interno', '', ''],
+            ['Tombo', 'Tipo', 'Data'],
+            ['045112', 'Monitor', '31/07/2026'],
+            ['', '', '']
+          ];
+          var linhas = C.importar._montarLinhas(matriz,
+            { tomboNovo: 0, equipamento: 1, dataEntrada: 2, modelo: -1 }, 1);
+          eq(linhas.length, 2, 'linhas após o cabeçalho');
+          eq(linhas[0].tomboNovo, '045112', 'tombo');
+          eq(linhas[0].equipamento, 'Monitor', 'equipamento');
+          eq(linhas[0].dataEntrada, '2026-07-31', 'data convertida');
+          eq(linhas[0].modelo, '', 'coluna não mapeada fica vazia');
+          eq(linhas[0]._linha, 3, 'número da linha da planilha');
+          return 'mapa e offset corretos';
+        });
+
+        /* ---- 15. Drill-down da dashboard ---- */
+
+        (function () {
+          var D = C.pages.dashboard;
+          var palco2 = document.createElement('div');
+          document.body.appendChild(palco2);
+          var vivo = null;
+
+          function remontar() {
+            if (vivo && vivo.destruir) vivo.destruir();
+            D._limpar();
+            palco2.innerHTML = '';
+            vivo = D.montar(palco2, function () {});
+          }
+
+          t('dashboard tem filtro global por modelo, equipamento e situação', function () {
+            remontar();
+            ['#dash-modelo', '#dash-equip', '#dash-tom'].forEach(function (sel) {
+              if (!palco2.querySelector(sel)) throw new Error('falta o filtro ' + sel);
+            });
+            var opts = palco2.querySelectorAll('#dash-modelo option').length;
+            eq(opts, L.get('modelos').length + 1, 'modelos no select (+ "Todos")');
+            return opts + ' opções de modelo';
+          });
+
+          t('filtro por modelo recorta o conjunto', function () {
+            remontar();
+            var todos = S.estoqueLaboratorio();
+            var alvo = todos.length ? todos[0].modelo : '';
+            var esperado = todos.filter(function (e) { return e.modelo === alvo; }).length;
+
+            var sel = palco2.querySelector('#dash-modelo');
+            sel.value = alvo;
+            sel.dispatchEvent(new Event('change'));
+
+            eq(D._filtro().modelo, alvo, 'filtro registrado');
+            eq(D._recorte().length, esperado, 'tamanho do recorte');
+            if (esperado >= todos.length) throw new Error('o recorte não reduziu nada');
+            return alvo + ': ' + esperado + ' de ' + todos.length;
+          });
+
+          t('KPI e centro do donut acompanham o filtro de modelo', function () {
+            var hero = palco2.querySelector('.stat--hero .stat__value').textContent.trim();
+            eq(hero, U.numero(D._recorte().length), 'hero do recorte');
+            if (palco2.querySelector('.stat--hero .stat__label').textContent.indexOf('recorte') === -1) {
+              throw new Error('o rótulo do hero não indicou o recorte');
+            }
+            return 'hero = ' + hero;
+          });
+
+          t('clique no donut filtra por situação (cross-filter)', function () {
+            remontar();
+            var antes = D._recorte().length;
+            // Simula o clique numa fatia acionando o mesmo caminho do gráfico.
+            D._filtro().tom = 'critical';
+            var comDefeito = D._recorte();
+            if (comDefeito.length >= antes) throw new Error('o recorte não reduziu');
+            var todosCriticos = comDefeito.every(function (e) {
+              return L.statusMeta(e.status).tom === 'critical';
+            });
+            if (!todosCriticos) throw new Error('entrou item de outro tom no recorte');
+            return comDefeito.length + ' com defeito de ' + antes;
+          });
+
+          t('cada gráfico ignora a própria dimensão (não vira barra única)', function () {
+            remontar();
+            D._filtro().tom = 'critical';
+            D._filtro().equipamento = S.estoqueLaboratorio()[0].equipamento;
+
+            // O donut recebe recorte('tom'): mantém todas as situações visíveis.
+            var paraDonut = D._recorte('tom');
+            var tons = {};
+            paraDonut.forEach(function (e) { tons[L.statusMeta(e.status).tom] = true; });
+            if (Object.keys(tons).length < 1) throw new Error('donut ficou sem dados');
+
+            // As barras de tipo recebem recorte('equipamento').
+            var paraTipo = D._recorte('equipamento');
+            if (paraTipo.some(function (e) { return L.statusMeta(e.status).tom !== 'critical'; })) {
+              throw new Error('o filtro de situação não foi aplicado às barras');
+            }
+            return 'dimensões cruzadas corretamente';
+          });
+
+          t('filtros combinam (modelo + situação + equipamento)', function () {
+            remontar();
+            var f = D._filtro();
+            f.modelo = 'Ragtech Easy Way 1200';
+            f.tom = 'critical';
+            var r = D._recorte();
+            var ok = r.every(function (e) {
+              return e.modelo === 'Ragtech Easy Way 1200' &&
+                     L.statusMeta(e.status).tom === 'critical';
+            });
+            if (!ok) throw new Error('o recorte combinado deixou passar item errado');
+            return r.length + ' item(ns) atendem aos dois filtros';
+          });
+
+          t('chips mostram os filtros ativos e permitem remover', function () {
+            remontar();
+            var f = D._filtro();
+            f.modelo = 'Ragtech Easy Way 1200';
+            f.tom = 'warning';
+            palco2.querySelector('#dash-modelo').dispatchEvent(new Event('change'));
+
+            var chips = palco2.querySelectorAll('[data-remover]');
+            if (chips.length < 1) throw new Error('nenhum chip renderizado');
+            var alvo = palco2.querySelector('[data-remover="tom"]');
+            if (!alvo) throw new Error('sem chip para a situação');
+            alvo.click();
+            eq(D._filtro().tom, '', 'filtro de situação removido');
+            return chips.length + ' chip(s), remoção funcionando';
+          });
+
+          t('"Limpar tudo" zera o drill-down', function () {
+            remontar();
+            var f = D._filtro();
+            f.modelo = 'Ragtech Easy Way 1200';
+            f.equipamento = 'Nobreak';
+            f.tom = 'critical';
+            palco2.querySelector('#dash-modelo').dispatchEvent(new Event('change'));
+
+            var btn = palco2.querySelector('[data-limpar-dash]');
+            if (!btn) throw new Error('sem o botão Limpar tudo');
+            btn.click();
+            var d = D._filtro();
+            if (d.modelo || d.equipamento || d.tom || d.predio) throw new Error('sobrou filtro');
+            eq(D._recorte().length, S.estoqueLaboratorio().length, 'voltou ao total');
+            return 'limpo';
+          });
+
+          t('barras de tipo listam as 14 categorias, inclusive as zeradas', function () {
+            remontar();
+            D._filtro().tom = 'critical';
+            palco2.querySelector('#dash-tom').value = 'critical';
+            palco2.querySelector('#dash-tom').dispatchEvent(new Event('change'));
+
+            // A tabela-gêmea é a fonte auditável do gráfico.
+            var linhas = palco2.querySelectorAll(
+              '[data-vista-alvo="tabela"][data-chave="tipo"] tbody tr');
+            eq(linhas.length, L.get('equipamentos').length, 'linhas na tabela de tipos');
+
+            var comZero = Array.prototype.filter.call(linhas, function (tr) {
+              return tr.lastElementChild.textContent.trim() === '0';
+            }).length;
+            if (!comZero) throw new Error('nenhuma categoria zerada foi listada');
+            return linhas.length + ' categorias · ' + comZero + ' zeradas exibidas';
+          });
+
+          t('drill-down sobrevive a uma nova entrada em tempo real', function () {
+            remontar();
+            D._filtro().equipamento = 'Monitor';
+            palco2.querySelector('#dash-equip').value = 'Monitor';
+            palco2.querySelector('#dash-equip').dispatchEvent(new Event('change'));
+            var antes = D._recorte().length;
+
+            S.registrarEntrada({
+              dataEntrada: new Date().toISOString().slice(0, 10), tomboNovo: '222001',
+              equipamento: 'Monitor', modelo: 'HP P22A G4', status: 'Estoque',
+              predioOrigem: 'CSE', setorOrigem: 'OAB', ttr: 'Pendente'
+            });
+
+            eq(D._filtro().equipamento, 'Monitor', 'filtro preservado');
+            eq(D._recorte().length, antes + 1, 'recorte atualizado');
+            var hero = palco2.querySelector('.stat--hero .stat__value').textContent.trim();
+            eq(hero, U.numero(antes + 1), 'hero repintado');
+            return antes + ' → ' + (antes + 1);
+          });
+
+          t('gráficos continuam desenhando com filtro ativo', function () {
+            remontar();
+            D._filtro().tom = 'good';
+            palco2.querySelector('#dash-tom').value = 'good';
+            palco2.querySelector('#dash-tom').dispatchEvent(new Event('change'));
+            var canvases = palco2.querySelectorAll('canvas').length;
+            var vazios = palco2.querySelectorAll('.chart-empty').length;
+            if (canvases < 3) throw new Error('só ' + canvases + ' canvas');
+            if (vivo && vivo.destruir) vivo.destruir();
+            palco2.remove();
+            return canvases + ' canvas · ' + vazios + ' vazio(s)';
+          });
+        })();
+
+        /* ---- 16. Erros globais ---- */
         t('nenhum erro global durante a execução', function () {
           if (window.__erros.length) throw new Error(window.__erros.join(' | '));
           return 'console limpo';

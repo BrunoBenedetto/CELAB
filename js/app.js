@@ -9,11 +9,12 @@
   var U = CELAB.util;
 
   var ROTAS = [
-    { id: 'dashboard',  rotulo: 'Dashboard',              icone: 'dashboard', secao: 'Principal' },
-    { id: 'estoque',    rotulo: 'Estoque Laboratório',    icone: 'caixa',     secao: 'Principal', contador: 'lab' },
-    { id: 'entrada',    rotulo: 'Entrada de Equipamentos',icone: 'entrada',   secao: 'Movimentação' },
-    { id: 'saida',      rotulo: 'Saída de Equipamentos',  icone: 'saida',     secao: 'Movimentação' },
-    { id: 'relatorios', rotulo: 'Relatórios e Filtros',   icone: 'relatorio', secao: 'Análise' }
+    { id: 'dashboard',     rotulo: 'Dashboard',              icone: 'dashboard', secao: 'Principal' },
+    { id: 'estoque',       rotulo: 'Estoque Laboratório',    icone: 'caixa',     secao: 'Principal', contador: 'lab' },
+    { id: 'entrada',       rotulo: 'Entrada de Equipamentos',icone: 'entrada',   secao: 'Movimentação' },
+    { id: 'saida',         rotulo: 'Saída de Equipamentos',  icone: 'saida',     secao: 'Movimentação' },
+    { id: 'relatorios',    rotulo: 'Relatórios e Filtros',   icone: 'relatorio', secao: 'Análise' },
+    { id: 'configuracoes', rotulo: 'Configurações',          icone: 'engrenagem', secao: 'Sistema' }
   ];
 
   var raiz = null;
@@ -56,10 +57,12 @@
 
           '<nav class="sidebar__nav" aria-label="Navegação principal">' + nav +
             '<div class="nav-section">Ferramentas</div>' +
+            '<button class="nav-item" type="button" data-acao="importar">' +
+              UI.icone('planilha', 18) + '<span>Importar planilha</span></button>' +
             '<button class="nav-item" type="button" data-acao="exportar-geral">' +
               UI.icone('download', 18) + '<span>Exportar Geral</span></button>' +
             '<button class="nav-item" type="button" data-acao="config">' +
-              UI.icone('engrenagem', 18) + '<span>Dados e backup</span></button>' +
+              UI.icone('salvar', 18) + '<span>Dados e backup</span></button>' +
           '</nav>' +
 
           '<div class="sidebar__foot">' +
@@ -334,6 +337,7 @@
         if (acao === 'menu') return abrirSidebarMobile();
         if (acao === 'tema') { UI.alternarTema(); return pintarBotaoTema(); }
         if (acao === 'config') return abrirConfig();
+        if (acao === 'importar') { fecharSidebarMobile(); return CELAB.importar.abrir(); }
 
         // Na barra superior o dropdown basta; na sidebar (que fecha no
         // mobile) o modal é o caminho confiável.
@@ -428,6 +432,8 @@
     raiz = document.getElementById('app');
     UI.aplicarTema(UI.temaAtual());
     CELAB.store.inicializar();
+    // Botão ⚙ ao lado dos campos: um único ouvinte para todo o app.
+    CELAB.gerenciador.ligarGlobal();
 
     if (CELAB.auth.autenticado()) abrirApp();
     else abrirLogin();

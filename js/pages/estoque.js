@@ -8,10 +8,14 @@
   var UI = CELAB.ui;
   var U = CELAB.util;
 
+  var L = CELAB.listas;
   var POR_PAGINA = 25;
 
   // Estado da view (persiste enquanto a aba está montada)
-  var filtros = { busca: '', status: '', equipamento: '', modelo: '', ttr: '', local: 'lab' };
+  var filtros = {
+    busca: '', status: '', equipamento: '', modelo: '',
+    ttr: '', setor: '', predio: '', tecnico: '', local: 'lab'
+  };
   var ordem = { campo: 'atualizadoEm', direcao: 'desc' };
   var pagina = 1;
 
@@ -20,16 +24,28 @@
   function filtrar() {
     var lista = CELAB.store.listarEquipamentos();
 
+    // Presença física vem do campo, não do rótulo do status.
     if (filtros.local === 'lab') {
-      lista = lista.filter(function (e) { return CELAB.STATUS_NO_LAB.indexOf(e.status) > -1; });
+      lista = lista.filter(function (e) { return e.noLaboratorio; });
     } else if (filtros.local === 'fora') {
-      lista = lista.filter(function (e) { return e.status === 'Disponibilizado'; });
+      lista = lista.filter(function (e) { return !e.noLaboratorio; });
     }
 
     if (filtros.status) lista = lista.filter(function (e) { return e.status === filtros.status; });
     if (filtros.equipamento) lista = lista.filter(function (e) { return e.equipamento === filtros.equipamento; });
     if (filtros.modelo) lista = lista.filter(function (e) { return e.modelo === filtros.modelo; });
     if (filtros.ttr) lista = lista.filter(function (e) { return e.ttr === filtros.ttr; });
+    if (filtros.tecnico) lista = lista.filter(function (e) { return e.tecnico === filtros.tecnico; });
+    if (filtros.predio) {
+      lista = lista.filter(function (e) {
+        return e.predioOrigem === filtros.predio || e.predioDestino === filtros.predio;
+      });
+    }
+    if (filtros.setor) {
+      lista = lista.filter(function (e) {
+        return e.setorOrigem === filtros.setor || e.setorDestino === filtros.setor;
+      });
+    }
 
     if (filtros.busca) {
       var termo = U.slug(filtros.busca);
@@ -37,7 +53,7 @@
         return U.slug([
           e.tomboNovo, e.tomboAntigo, e.equipamento, e.modelo,
           e.chamado, e.predioOrigem, e.setorOrigem, e.predioDestino,
-          e.setorDestino, e.servicoSolicitado
+          e.setorDestino, e.servicoSolicitado, e.tecnico, e.status
         ].join(' ')).indexOf(termo) > -1;
       });
     }
@@ -56,6 +72,8 @@
         '</div>' +
         '<div class="page-head__spacer"></div>' +
         '<div class="btn-group">' +
+          '<button class="btn btn--outline btn--sm" data-acao="importar">' +
+            UI.icone('planilha', 14) + '<span>Importar</span></button>' +
           '<button class="btn btn--outline btn--sm" data-acao="excel">' +
             UI.icone('excel', 14) + '<span>Excel</span></button>' +
           '<button class="btn btn--outline btn--sm" data-acao="pdf">' +
@@ -65,6 +83,7 @@
         '</div>' +
       '</div>' +
 
+      // Todos os filtros leem das listas editáveis.
       '<div class="filter-bar">' +
         '<div class="field field--grow">' +
           '<label for="f-busca">Buscar</label>' +
@@ -74,25 +93,40 @@
           '<label for="f-local">Localização</label>' +
           '<select class="select" id="f-local">' +
             '<option value="lab">No laboratório</option>' +
-            '<option value="fora">Disponibilizados</option>' +
+            '<option value="fora">Fora do laboratório</option>' +
             '<option value="todos">Todos</option>' +
           '</select>' +
         '</div>' +
         '<div class="field">' +
           '<label for="f-status">Status</label>' +
-          '<select class="select" id="f-status">' + UI.opcoes(CELAB.STATUS_TODOS, '', 'Todos os status') + '</select>' +
+          '<select class="select" id="f-status">' + UI.opcoes(L.statusTodos(), '', 'Todos os status') + '</select>' +
         '</div>' +
         '<div class="field">' +
           '<label for="f-equip">Equipamento</label>' +
-          '<select class="select" id="f-equip">' + UI.opcoes(CELAB.EQUIPAMENTOS, '', 'Todos') + '</select>' +
+          '<select class="select" id="f-equip">' + UI.opcoes(L.get('equipamentos'), '', 'Todos') + '</select>' +
         '</div>' +
         '<div class="field">' +
           '<label for="f-modelo">Modelo</label>' +
-          '<select class="select" id="f-modelo">' + UI.opcoes(CELAB.MODELOS, '', 'Todos') + '</select>' +
+          '<select class="select" id="f-modelo">' + UI.opcoes(L.get('modelos'), '', 'Todos') + '</select>' +
+        '</div>' +
+        '<div class="field">' +
+          '<label for="f-predio">Prédio</label>' +
+          '<select class="select" id="f-predio">' + UI.opcoes(L.get('predios'), '', 'Todos') + '</select>' +
+        '</div>' +
+        '<div class="field field--grow">' +
+          '<label for="f-setor">Setor / Unidade</label>' +
+          '<select class="select" id="f-setor">' + UI.opcoes(L.get('setores'), '', 'Todos') + '</select>' +
+        '</div>' +
+        '<div class="field">' +
+          '<label for="f-tecnico">Técnico</label>' +
+          '<select class="select" id="f-tecnico">' + UI.opcoes(L.get('tecnicos'), '', 'Todos') + '</select>' +
         '</div>' +
         '<div class="field">' +
           '<label for="f-ttr">TTR</label>' +
-          '<select class="select" id="f-ttr">' + UI.opcoes(CELAB.TTR, '', 'Todos') + '</select>' +
+          '<select class="select" id="f-ttr">' +
+            UI.opcoes(L.ttrDe('entrada').concat(L.ttrDe('saida').filter(function (t) {
+              return L.ttrDe('entrada').indexOf(t) === -1;
+            })), '', 'Todos') + '</select>' +
         '</div>' +
         '<button class="btn btn--ghost btn--sm" data-acao="limpar-filtros" style="margin-bottom:1px">' +
           UI.icone('limpar', 14) + '<span>Limpar</span></button>' +
@@ -114,9 +148,11 @@
     { chave: 'tomboNovo',    titulo: 'Tombo Novo',   ordenavel: true },
     { chave: 'tomboAntigo',  titulo: 'Tombo Antigo', ordenavel: true },
     { chave: 'status',       titulo: 'Status',       ordenavel: true },
-    { chave: 'predioOrigem', titulo: 'Origem',       ordenavel: true },
+    { chave: 'predioOrigem', titulo: 'Prédio',       ordenavel: true },
+    { chave: 'setorOrigem',  titulo: 'Setor / Unidade', ordenavel: true },
     { chave: 'chamado',      titulo: 'Chamado',      ordenavel: true },
     { chave: 'dataEntrada',  titulo: 'Entrada',      ordenavel: true },
+    { chave: 'tecnico',      titulo: 'Técnico',      ordenavel: true },
     { chave: 'ttr',          titulo: 'TTR',          ordenavel: true }
   ];
 
@@ -161,11 +197,15 @@
         '<td class="num tombo">' + (e.tomboNovo ? U.esc(e.tomboNovo) : '<span class="muted">—</span>') + '</td>' +
         '<td class="num tombo">' + (e.tomboAntigo ? U.esc(e.tomboAntigo) : '<span class="muted">—</span>') + '</td>' +
         '<td>' + UI.chipStatus(e.status) + '</td>' +
-        '<td>' + (e.status === 'Disponibilizado'
+        '<td>' + (!e.noLaboratorio
                     ? '<span class="muted">→ ' + U.esc(e.predioDestino || '—') + '</span>'
                     : U.esc(e.predioOrigem || '—')) + '</td>' +
+        '<td>' + (!e.noLaboratorio
+                    ? '<span class="muted">→ ' + U.esc(e.setorDestino || '—') + '</span>'
+                    : U.esc(e.setorOrigem || '—')) + '</td>' +
         '<td class="num">' + (e.chamado ? U.esc(e.chamado) : '<span class="muted">—</span>') + '</td>' +
         '<td class="num">' + U.dataBR(e.dataEntrada) + '</td>' +
+        '<td>' + (e.tecnico ? U.esc(e.tecnico) : '<span class="muted">—</span>') + '</td>' +
         '<td>' + UI.tagTTR(e.ttr) + '</td>' +
         '<td class="col-actions">' +
           '<button class="icon-btn" data-ver="' + U.esc(e.id) + '" title="Ver detalhes" aria-label="Ver detalhes">' +
@@ -194,15 +234,20 @@
 
   function temFiltroAtivo() {
     return !!(filtros.busca || filtros.status || filtros.equipamento || filtros.modelo ||
-              filtros.ttr || filtros.local !== 'lab');
+              filtros.ttr || filtros.setor || filtros.predio || filtros.tecnico ||
+              filtros.local !== 'lab');
   }
 
   /* ---------- Formulário (criar / editar) ------------------------------------ */
 
-  /** Opções de status do formulário, preservando o estado atual do item. */
+  /**
+   * Status oferecidos na aba Estoque: os marcados para o contexto 'estoque'
+   * mais o valor atual do registro, para a edição de um item cujo status veio
+   * de uma entrada (ou foi removido da lista) não trocar o valor sem avisar.
+   */
   function statusDisponiveis(statusAtual) {
-    var lista = CELAB.STATUS_ESTOQUE.slice();
-    if (statusAtual && lista.indexOf(statusAtual) === -1) lista.push(statusAtual);
+    var lista = L.statusDe('estoque');
+    if (statusAtual && lista.indexOf(statusAtual) === -1) lista = lista.concat([statusAtual]);
     return lista;
   }
 
@@ -214,14 +259,23 @@
 
           '<div class="field">' +
             '<label for="eq-equipamento">Categoria / Equipamento <span class="req">*</span></label>' +
-            '<select class="select" id="eq-equipamento" name="equipamento" data-obrigatorio>' +
-              UI.opcoes(CELAB.EQUIPAMENTOS, ed.equipamento) + '</select>' +
+            UI.selectGerenciavel({
+              id: 'eq-equipamento', name: 'equipamento', lista: 'equipamentos',
+              valor: ed.equipamento, obrigatorio: true
+            }) +
             '<span class="field__error">Selecione o equipamento.</span>' +
           '</div>' +
 
           '<div class="field">' +
             '<label for="eq-modelo">Modelo <span class="req">*</span></label>' +
-            '<select class="select" id="eq-modelo" name="modelo" data-obrigatorio></select>' +
+            '<div class="field__linha">' +
+              '<select class="select" id="eq-modelo" name="modelo" data-obrigatorio></select>' +
+              (CELAB.auth.permissao('podeGerenciarListas')
+                ? '<button type="button" class="field__gerenciar" data-gerenciar-lista="modelos" ' +
+                  'data-alvo-campo="eq-modelo" title="Gerenciar modelos" ' +
+                  'aria-label="Gerenciar modelos">' + UI.icone('engrenagem', 15) + '</button>'
+                : '') +
+            '</div>' +
             '<span class="field__help">A lista é filtrada pela categoria escolhida.</span>' +
             '<span class="field__error">Selecione o modelo.</span>' +
           '</div>' +
@@ -241,18 +295,20 @@
 
           '<div class="field">' +
             '<label for="eq-status">Status <span class="req">*</span></label>' +
-            // A lista base é a do requisito (Defeito, Leilão, Estoque,
-            // Disponibilizado). "Manutenção" só entra quando o item já está
-            // nesse estado — vindo de uma entrada — para a edição não rebaixar
-            // silenciosamente o status ao salvar.
-            '<select class="select" id="eq-status" name="status" data-obrigatorio>' +
-              UI.opcoes(statusDisponiveis(ed.status), ed.status || 'Estoque', false) + '</select>' +
+            UI.selectGerenciavel({
+              id: 'eq-status', name: 'status', lista: 'status',
+              opcoesLista: statusDisponiveis(ed.status),
+              valor: ed.status || 'Estoque', obrigatorio: true, placeholder: false
+            }) +
+            '<span class="field__help" id="eq-desc-status"></span>' +
           '</div>' +
 
           '<div class="field">' +
             '<label for="eq-ttr">TTR</label>' +
-            '<select class="select" id="eq-ttr" name="ttr">' +
-              UI.opcoes(CELAB.TTR, ed.ttr || 'Pendente', false) + '</select>' +
+            UI.selectGerenciavel({
+              id: 'eq-ttr', name: 'ttr', lista: 'ttrEntrada',
+              valor: ed.ttr || 'Pendente', placeholder: 'Selecione…'
+            }) +
           '</div>' +
 
           '<div class="field">' +
@@ -269,14 +325,24 @@
 
           '<div class="field">' +
             '<label for="eq-predio">Prédio de origem</label>' +
-            '<select class="select" id="eq-predio" name="predioOrigem">' +
-              UI.opcoes(CELAB.PREDIOS, ed.predioOrigem) + '</select>' +
+            UI.selectGerenciavel({
+              id: 'eq-predio', name: 'predioOrigem', lista: 'predios', valor: ed.predioOrigem
+            }) +
           '</div>' +
 
           '<div class="field">' +
             '<label for="eq-setor">Setor / Unidade</label>' +
-            '<input class="input" type="text" id="eq-setor" name="setorOrigem" ' +
-              'value="' + U.esc(ed.setorOrigem || '') + '" placeholder="Ex.: 1ª Vara Cível">' +
+            UI.selectGerenciavel({
+              id: 'eq-setor', name: 'setorOrigem', lista: 'setores', valor: ed.setorOrigem
+            }) +
+          '</div>' +
+
+          '<div class="field">' +
+            '<label for="eq-tecnico">Técnico responsável</label>' +
+            UI.selectGerenciavel({
+              id: 'eq-tecnico', name: 'tecnico', lista: 'tecnicos',
+              valor: ed.tecnico, placeholder: 'Não informado'
+            }) +
           '</div>' +
 
           '<div class="field field--full">' +
@@ -314,6 +380,17 @@
       ref.el.querySelector('#eq-modelo'),
       eq && eq.modelo
     );
+
+    // Explica o efeito do status escolhido sobre a contagem do estoque.
+    var selStatus = ref.el.querySelector('#eq-status');
+    var desc = ref.el.querySelector('#eq-desc-status');
+    function explicar() {
+      var meta = L.statusMeta(selStatus.value);
+      desc.textContent = (meta.desc ? meta.desc + ' · ' : '') +
+        (meta.noLab ? 'conta no estoque do laboratório' : 'não conta no estoque');
+    }
+    selStatus.addEventListener('change', explicar);
+    explicar();
   }
 
   /** Retorna false para manter o modal aberto quando houver erro. */
@@ -366,11 +443,15 @@
         linha('Tombo novo', U.esc(eq.tomboNovo)) +
         linha('Tombo antigo', U.esc(eq.tomboAntigo)) +
         linha('Status', UI.chipStatus(eq.status)) +
+        linha('Localização', eq.noLaboratorio
+          ? '<span class="tag tag--ok">No laboratório</span>'
+          : '<span class="tag">Fora do laboratório</span>') +
         linha('TTR', UI.tagTTR(eq.ttr)) +
+        linha('Técnico responsável', U.esc(eq.tecnico)) +
         linha('Chamado', U.esc(eq.chamado)) +
         linha('Entrada', U.dataBR(eq.dataEntrada)) +
         linha('Origem', U.esc([eq.predioOrigem, eq.setorOrigem].filter(Boolean).join(' · '))) +
-        (eq.status === 'Disponibilizado'
+        (!eq.noLaboratorio
           ? linha('Saída', U.dataBR(eq.dataSaida)) +
             linha('Destino', U.esc([eq.predioDestino, eq.setorDestino].filter(Boolean).join(' · ')))
           : '') +
@@ -402,10 +483,13 @@
   function rotuloFiltro() {
     var partes = [];
     if (filtros.local === 'lab') partes.push('Somente itens no laboratório');
-    if (filtros.local === 'fora') partes.push('Somente disponibilizados');
+    if (filtros.local === 'fora') partes.push('Somente itens fora do laboratório');
     if (filtros.status) partes.push('Status: ' + filtros.status);
     if (filtros.equipamento) partes.push('Equipamento: ' + filtros.equipamento);
     if (filtros.modelo) partes.push('Modelo: ' + filtros.modelo);
+    if (filtros.predio) partes.push('Prédio: ' + filtros.predio);
+    if (filtros.setor) partes.push('Setor: ' + filtros.setor);
+    if (filtros.tecnico) partes.push('Técnico: ' + filtros.tecnico);
     if (filtros.ttr) partes.push('TTR: ' + filtros.ttr);
     if (filtros.busca) partes.push('Busca: "' + filtros.busca + '"');
     return partes.length ? partes.join(' · ') : 'Sem filtros aplicados';
@@ -441,13 +525,20 @@
   function montar(container) {
     container.innerHTML = esqueleto();
 
-    // Restaura os filtros da sessão anterior da aba
-    container.querySelector('#f-busca').value = filtros.busca;
-    container.querySelector('#f-local').value = filtros.local;
-    container.querySelector('#f-status').value = filtros.status;
-    container.querySelector('#f-equip').value = filtros.equipamento;
-    container.querySelector('#f-modelo').value = filtros.modelo;
-    container.querySelector('#f-ttr').value = filtros.ttr;
+    var CAMPOS_FILTRO = [
+      ['#f-local', 'local'], ['#f-status', 'status'], ['#f-equip', 'equipamento'],
+      ['#f-modelo', 'modelo'], ['#f-predio', 'predio'], ['#f-setor', 'setor'],
+      ['#f-tecnico', 'tecnico'], ['#f-ttr', 'ttr']
+    ];
+
+    function sincronizarFiltros() {
+      container.querySelector('#f-busca').value = filtros.busca;
+      CAMPOS_FILTRO.forEach(function (par) {
+        var el = container.querySelector(par[0]);
+        if (el) el.value = filtros[par[1]];
+      });
+    }
+    sincronizarFiltros();
 
     var redesenhar = function () { desenharTabela(container); };
 
@@ -459,9 +550,10 @@
       buscaDebounce(this.value);
     });
 
-    [['#f-local', 'local'], ['#f-status', 'status'], ['#f-equip', 'equipamento'],
-     ['#f-modelo', 'modelo'], ['#f-ttr', 'ttr']].forEach(function (par) {
-      container.querySelector(par[0]).addEventListener('change', function () {
+    CAMPOS_FILTRO.forEach(function (par) {
+      var el = container.querySelector(par[0]);
+      if (!el) return;
+      el.addEventListener('change', function () {
         filtros[par[1]] = this.value;
         pagina = 1;
         redesenhar();
@@ -479,17 +571,16 @@
       }
 
       if ((alvo = e.target.closest('[data-acao="limpar-filtros"]'))) {
-        filtros = { busca: '', status: '', equipamento: '', modelo: '', ttr: '', local: 'lab' };
+        filtros = {
+          busca: '', status: '', equipamento: '', modelo: '',
+          ttr: '', setor: '', predio: '', tecnico: '', local: 'lab'
+        };
         pagina = 1;
-        container.querySelector('#f-busca').value = '';
-        container.querySelector('#f-local').value = 'lab';
-        container.querySelector('#f-status').value = '';
-        container.querySelector('#f-equip').value = '';
-        container.querySelector('#f-modelo').value = '';
-        container.querySelector('#f-ttr').value = '';
+        sincronizarFiltros();
         return redesenhar();
       }
 
+      if ((alvo = e.target.closest('[data-acao="importar"]'))) return CELAB.importar.abrir();
       if ((alvo = e.target.closest('[data-acao="excel"]'))) return exportar('excel');
       if ((alvo = e.target.closest('[data-acao="pdf"]')))   return exportar('pdf');
 
@@ -548,8 +639,37 @@
 
     desenharTabela(container);
 
-    // Tempo real: entradas e saídas em qualquer aba repintam esta tabela.
-    var cancelar = CELAB.store.assinar(function () { desenharTabela(container); });
+    /** Repinta os selects dos filtros quando as listas mudam. */
+    function repintarFiltros() {
+      var fontes = {
+        '#f-status': L.statusTodos(),
+        '#f-equip': L.get('equipamentos'),
+        '#f-modelo': L.get('modelos'),
+        '#f-predio': L.get('predios'),
+        '#f-setor': L.get('setores'),
+        '#f-tecnico': L.get('tecnicos')
+      };
+      Object.keys(fontes).forEach(function (sel) {
+        var el = container.querySelector(sel);
+        if (!el) return;
+        var atual = el.value;
+        el.innerHTML = UI.opcoes(fontes[sel], atual, 'Todos');
+        el.value = atual;
+        if (el.value !== atual) {
+          // A opção filtrada deixou de existir: volta para "Todos".
+          el.value = '';
+          var chave = (CAMPOS_FILTRO.find(function (p) { return p[0] === sel; }) || [])[1];
+          if (chave) filtros[chave] = '';
+        }
+      });
+      desenharTabela(container);
+    }
+
+    // Tempo real: entradas, saídas e mudanças de lista repintam esta tela.
+    var cancelar = CELAB.store.assinar(function (ev) {
+      if (ev && ev.tipo === 'listas') return repintarFiltros();
+      desenharTabela(container);
+    });
 
     return { destruir: cancelar };
   }

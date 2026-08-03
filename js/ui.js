@@ -129,7 +129,14 @@
     cadeado:   '<rect width="18" height="11" x="3" y="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>',
     limpar:    '<path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M9.5 11v6"/><path d="M14.5 11v6"/><path d="M5 6l1 14a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2l1-14"/>',
     predio:    '<path d="M6 22V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18Z"/><path d="M6 12H4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h2"/><path d="M18 9h2a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-2"/><path d="M10 6h4"/><path d="M10 10h4"/><path d="M10 14h4"/><path d="M10 18h4"/>',
-    relogio:   '<circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>'
+    relogio:   '<circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>',
+    etiqueta:  '<path d="M12.586 2.586A2 2 0 0 0 11.172 2H4a2 2 0 0 0-2 2v7.172a2 2 0 0 0 .586 1.414l8.704 8.704a2.426 2.426 0 0 0 3.42 0l6.58-6.58a2.426 2.426 0 0 0 0-3.42z"/><circle cx="7.5" cy="7.5" r="1.5"/>',
+    upload:    '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m17 8-5-5-5 5"/><path d="M12 3v12"/>',
+    planilha:  '<rect width="18" height="18" x="3" y="3" rx="2"/><path d="M3 9h18"/><path d="M9 21V9"/><path d="M15 21V9"/><path d="M3 15h18"/>',
+    listas:    '<path d="M8 6h13"/><path d="M8 12h13"/><path d="M8 18h13"/><path d="M3 6h.01"/><path d="M3 12h.01"/><path d="M3 18h.01"/>',
+    voltar:    '<path d="m12 19-7-7 7-7"/><path d="M19 12H5"/>',
+    salvar:    '<path d="M15.2 3a2 2 0 0 1 1.4.6l3.8 3.8a2 2 0 0 1 .6 1.4V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"/><path d="M17 21v-8H7v8"/><path d="M7 3v5h8"/>',
+    restaurar: '<path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/>'
   };
 
   /** Devolve o markup SVG de um ícone. */
@@ -283,6 +290,66 @@
   }
 
   /**
+   * Como `opcoes`, mas garante que o valor atual apareça na lista mesmo que
+   * ele não pertença mais a ela. Sem isto, editar um registro antigo cujo
+   * status ou TTR foi renomeado/removido trocaria o valor silenciosamente.
+   */
+  function opcoesCom(lista, valorAtual, placeholder) {
+    var l = (lista || []).slice();
+    var v = String(valorAtual == null ? '' : valorAtual).trim();
+    if (v) {
+      var existe = l.some(function (item) {
+        var alvo = typeof item === 'string' ? item : item.valor;
+        return CELAB.listas._chave(alvo) === CELAB.listas._chave(v);
+      });
+      if (!existe) l.push({ valor: v, rotulo: v + '  (fora da lista atual)' });
+    }
+    return opcoes(l, valorAtual, placeholder);
+  }
+
+  /**
+   * Campo <select> alimentado por uma lista editável, com botão de
+   * gerenciamento ao lado. É o componente que cumpre o requisito de nenhum
+   * dropdown ser fixo: o usuário abre o gerenciador sem sair do formulário.
+   *
+   * @param {{id, name, lista, valor, placeholder, obrigatorio, contexto,
+   *          opcoesLista, semGerenciar}} cfg
+   */
+  function selectGerenciavel(cfg) {
+    var lista = cfg.opcoesLista || CELAB.listas.get(cfg.lista);
+    var podeGerenciar = !cfg.semGerenciar && CELAB.auth.permissao('podeGerenciarListas');
+
+    var html = '<div class="field__linha">' +
+      '<select class="select" id="' + cfg.id + '" name="' + (cfg.name || cfg.id) + '"' +
+        (cfg.obrigatorio ? ' data-obrigatorio' : '') +
+        ' data-lista="' + util.esc(cfg.lista || '') + '">' +
+        opcoesCom(lista, cfg.valor, cfg.placeholder) +
+      '</select>';
+
+    if (podeGerenciar) {
+      html += '<button type="button" class="field__gerenciar" ' +
+        'data-gerenciar-lista="' + util.esc(cfg.lista) + '" ' +
+        'data-alvo-campo="' + cfg.id + '" ' +
+        'title="Gerenciar as opções desta lista" ' +
+        'aria-label="Gerenciar opções">' + icone('engrenagem', 15) + '</button>';
+    }
+    return html + '</div>';
+  }
+
+  /**
+   * Repinta um <select> criado por `selectGerenciavel` mantendo a seleção.
+   * Chamado quando as listas mudam (evento 'listas' do store).
+   */
+  function repintarSelect(el, lista, placeholder) {
+    if (!el) return;
+    var atual = el.value;
+    el.innerHTML = opcoesCom(lista, atual, placeholder);
+    el.value = atual;
+    // O valor pode ter sido excluído: cai para vazio em vez de mentir.
+    if (el.value !== atual) el.value = '';
+  }
+
+  /**
    * Liga um par de selects Equipamento -> Modelo.
    * O select de modelo mostra os modelos da categoria em "Modelos de <cat>" e
    * o restante em "Outros modelos", para nada ficar inacessível.
@@ -291,7 +358,7 @@
     function repintar(preservar) {
       var cat = selEquip.value;
       var atual = preservar ? selModelo.value : '';
-      var grupos = CELAB.modelosDe(cat);
+      var grupos = CELAB.listas.modelosDe(cat);
       var html = '<option value="">Selecione…</option>';
 
       if (cat && grupos.sugeridos.length) {
@@ -305,9 +372,15 @@
         });
         html += '</optgroup>';
       } else {
-        CELAB.MODELOS.forEach(function (m) {
+        CELAB.listas.get('modelos').forEach(function (m) {
           html += '<option value="' + util.esc(m) + '">' + util.esc(m) + '</option>';
         });
+      }
+      // Modelo gravado que saiu da lista continua visível, para a edição de um
+      // registro antigo não trocar o valor sem avisar.
+      if (atual && html.indexOf('value="' + util.esc(atual) + '"') === -1) {
+        html += '<option value="' + util.esc(atual) + '">' + util.esc(atual) +
+                '  (fora da lista atual)</option>';
       }
       selModelo.innerHTML = html;
       if (atual) selModelo.value = atual;
@@ -315,13 +388,25 @@
 
     selEquip.addEventListener('change', function () { repintar(false); });
     repintar(false);
-    if (modeloInicial) selModelo.value = modeloInicial;
+    if (modeloInicial) {
+      if (!Array.prototype.some.call(selModelo.options, function (o) { return o.value === modeloInicial; })) {
+        var extra = document.createElement('option');
+        extra.value = modeloInicial;
+        extra.textContent = modeloInicial + '  (fora da lista atual)';
+        selModelo.appendChild(extra);
+      }
+      selModelo.value = modeloInicial;
+    }
+    // Permite redesenhar após uma mudança nas listas.
+    return repintar;
   }
 
   /** Chip de status pronto (cor + rótulo — nunca só a cor). */
   function chipStatus(status) {
-    var meta = CELAB.statusMeta(status);
-    return '<span class="chip chip--' + meta.chip + '" title="' + util.esc(meta.desc) + '">' +
+    if (!status || status === '—') return '<span class="muted">—</span>';
+    var meta = CELAB.listas.statusMeta(status);
+    return '<span class="chip chip--tom-' + (meta.tom || 'neutral') + '"' +
+      (meta.desc ? ' title="' + util.esc(meta.desc) + '"' : '') + '>' +
       '<span class="chip__dot"></span>' + util.esc(meta.valor) + '</span>';
   }
 
@@ -331,10 +416,13 @@
       '<span class="chip__dot"></span>' + util.esc(meta.rotulo) + '</span>';
   }
 
+  /** TTR: verde quando concluído, âmbar quando pendente. Lista é livre. */
   function tagTTR(ttr) {
     if (!ttr) return '<span class="muted">—</span>';
-    return '<span class="tag ' + (ttr === 'Realizado' ? 'tag--ok' : 'tag--pending') + '">' +
-      util.esc(ttr) + '</span>';
+    var classe = 'tag';
+    if (/realizad/i.test(ttr)) classe += ' tag--ok';
+    else if (/pendente/i.test(ttr)) classe += ' tag--pending';
+    return '<span class="' + classe + '">' + util.esc(ttr) + '</span>';
   }
 
   /* ---------- Estado vazio / paginação ---------------------------------------- */
@@ -436,6 +524,9 @@
     fecharModal: fecharModal,
     confirmar: confirmar,
     opcoes: opcoes,
+    opcoesCom: opcoesCom,
+    selectGerenciavel: selectGerenciavel,
+    repintarSelect: repintarSelect,
     ligarEquipamentoModelo: ligarEquipamentoModelo,
     chipStatus: chipStatus,
     chipTipoMov: chipTipoMov,

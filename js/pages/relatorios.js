@@ -12,11 +12,13 @@
   var UI = CELAB.ui;
   var U = CELAB.util;
 
+  var L = CELAB.listas;
   var POR_PAGINA = 30;
 
   var filtros = {
-    de: '', ate: '', tipo: '', predio: '', status: '',
-    equipamento: '', modelo: '', tombo: '', chamado: '', busca: ''
+    de: '', ate: '', tipo: '', predio: '', setor: '', status: '',
+    equipamento: '', modelo: '', tecnico: '', ttr: '',
+    tombo: '', chamado: '', busca: ''
   };
   var ordem = { campo: 'registradoEm', direcao: 'desc' };
   var pagina = 1;
@@ -30,9 +32,12 @@
     if (filtros.ate) lista = lista.filter(function (m) { return (m.data || '') <= filtros.ate; });
     if (filtros.tipo)        lista = lista.filter(function (m) { return m.tipo === filtros.tipo; });
     if (filtros.predio)      lista = lista.filter(function (m) { return m.predio === filtros.predio; });
+    if (filtros.setor)       lista = lista.filter(function (m) { return m.setor === filtros.setor; });
     if (filtros.status)      lista = lista.filter(function (m) { return m.statusResultante === filtros.status; });
     if (filtros.equipamento) lista = lista.filter(function (m) { return m.equipamento === filtros.equipamento; });
     if (filtros.modelo)      lista = lista.filter(function (m) { return m.modelo === filtros.modelo; });
+    if (filtros.tecnico)     lista = lista.filter(function (m) { return m.tecnico === filtros.tecnico; });
+    if (filtros.ttr)         lista = lista.filter(function (m) { return m.ttr === filtros.ttr; });
 
     if (filtros.tombo) {
       var t = U.slug(filtros.tombo);
@@ -49,7 +54,8 @@
       lista = lista.filter(function (m) {
         return U.slug([
           m.equipamento, m.modelo, m.tomboNovo, m.tomboAntigo, m.chamado,
-          m.predio, m.setor, m.servicoSolicitado, m.observacao, m.usuario
+          m.predio, m.setor, m.servicoSolicitado, m.observacao, m.usuario,
+          m.tecnico, m.statusResultante
         ].join(' ')).indexOf(b) > -1;
       });
     }
@@ -69,9 +75,12 @@
     }
     if (filtros.tipo)        p.push('Tipo: ' + CELAB.tipoMovMeta(filtros.tipo).rotulo);
     if (filtros.predio)      p.push('Prédio: ' + filtros.predio);
+    if (filtros.setor)       p.push('Setor: ' + filtros.setor);
     if (filtros.status)      p.push('Status: ' + filtros.status);
     if (filtros.equipamento) p.push('Equipamento: ' + filtros.equipamento);
     if (filtros.modelo)      p.push('Modelo: ' + filtros.modelo);
+    if (filtros.tecnico)     p.push('Técnico: ' + filtros.tecnico);
+    if (filtros.ttr)         p.push('TTR: ' + filtros.ttr);
     if (filtros.tombo)       p.push('Tombo: ' + filtros.tombo);
     if (filtros.chamado)     p.push('Chamado: ' + filtros.chamado);
     if (filtros.busca)       p.push('Busca: "' + filtros.busca + '"');
@@ -107,19 +116,28 @@
             UI.opcoes(CELAB.TIPOS_MOV.map(function (t) { return { valor: t.valor, rotulo: t.rotulo }; }), '', 'Todas') +
           '</select></div>' +
         '<div class="field field--grow"><label for="r-predio">Prédio</label>' +
-          '<select class="select" id="r-predio">' + UI.opcoes(CELAB.PREDIOS, '', 'Todos') + '</select></div>' +
+          '<select class="select" id="r-predio">' + UI.opcoes(L.get('predios'), '', 'Todos') + '</select></div>' +
+        '<div class="field field--grow"><label for="r-setor">Setor / Unidade</label>' +
+          '<select class="select" id="r-setor">' + UI.opcoes(L.get('setores'), '', 'Todos') + '</select></div>' +
         '<div class="field"><label for="r-status">Status</label>' +
-          '<select class="select" id="r-status">' + UI.opcoes(CELAB.STATUS_TODOS, '', 'Todos') + '</select></div>' +
+          '<select class="select" id="r-status">' + UI.opcoes(L.statusTodos(), '', 'Todos') + '</select></div>' +
         '<div class="field"><label for="r-equip">Equipamento</label>' +
-          '<select class="select" id="r-equip">' + UI.opcoes(CELAB.EQUIPAMENTOS, '', 'Todos') + '</select></div>' +
+          '<select class="select" id="r-equip">' + UI.opcoes(L.get('equipamentos'), '', 'Todos') + '</select></div>' +
         '<div class="field"><label for="r-modelo">Modelo</label>' +
-          '<select class="select" id="r-modelo">' + UI.opcoes(CELAB.MODELOS, '', 'Todos') + '</select></div>' +
+          '<select class="select" id="r-modelo">' + UI.opcoes(L.get('modelos'), '', 'Todos') + '</select></div>' +
+        '<div class="field"><label for="r-tecnico">Técnico</label>' +
+          '<select class="select" id="r-tecnico">' + UI.opcoes(L.get('tecnicos'), '', 'Todos') + '</select></div>' +
+        '<div class="field"><label for="r-ttr">TTR</label>' +
+          '<select class="select" id="r-ttr">' +
+            UI.opcoes(L.ttrDe('entrada').concat(L.ttrDe('saida').filter(function (t) {
+              return L.ttrDe('entrada').indexOf(t) === -1;
+            })), '', 'Todos') + '</select></div>' +
         '<div class="field"><label for="r-tombo">Tombo</label>' +
           '<input class="input" type="search" id="r-tombo" placeholder="Novo ou antigo"></div>' +
         '<div class="field"><label for="r-chamado">Chamado</label>' +
           '<input class="input" type="search" id="r-chamado" placeholder="Ex.: CH-10450"></div>' +
         '<div class="field field--grow"><label for="r-busca">Busca livre</label>' +
-          '<input class="input" type="search" id="r-busca" placeholder="Setor, serviço, observação, usuário…"></div>' +
+          '<input class="input" type="search" id="r-busca" placeholder="Serviço, observação, usuário…"></div>' +
         '<div style="display:flex;gap:8px;margin-bottom:1px">' +
           '<button class="btn btn--ghost btn--sm" data-acao="periodo" data-dias="7">7 dias</button>' +
           '<button class="btn btn--ghost btn--sm" data-acao="periodo" data-dias="30">30 dias</button>' +
@@ -156,7 +174,8 @@
     { chave: 'tomboAntigo',      titulo: 'Tombo Antigo', ordenavel: true },
     { chave: 'statusResultante', titulo: 'Situação',     ordenavel: true },
     { chave: 'predio',           titulo: 'Prédio',       ordenavel: true },
-    { chave: 'setor',            titulo: 'Setor',        ordenavel: true },
+    { chave: 'setor',            titulo: 'Setor / Unidade', ordenavel: true },
+    { chave: 'tecnico',          titulo: 'Técnico',      ordenavel: true },
     { chave: 'ttr',              titulo: 'TTR',          ordenavel: true },
     { chave: 'usuario',          titulo: 'Usuário',      ordenavel: true }
   ];
@@ -219,10 +238,10 @@
         '<td>' + U.esc(m.modelo || '—') + '</td>' +
         '<td class="num tombo">' + (m.tomboNovo ? U.esc(m.tomboNovo) : '<span class="muted">—</span>') + '</td>' +
         '<td class="num tombo">' + (m.tomboAntigo ? U.esc(m.tomboAntigo) : '<span class="muted">—</span>') + '</td>' +
-        '<td>' + (m.statusResultante && m.statusResultante !== '—'
-                    ? UI.chipStatus(m.statusResultante) : '<span class="muted">—</span>') + '</td>' +
+        '<td>' + UI.chipStatus(m.statusResultante) + '</td>' +
         '<td>' + U.esc(m.predio || '—') + '</td>' +
         '<td>' + U.esc(m.setor || '—') + '</td>' +
+        '<td>' + (m.tecnico ? U.esc(m.tecnico) : '<span class="muted">—</span>') + '</td>' +
         '<td>' + UI.tagTTR(m.ttr) + '</td>' +
         '<td class="muted">' + U.esc(m.usuario || '—') + '</td>' +
         '<td class="col-actions">' +
@@ -264,10 +283,10 @@
           linha('Tombo novo', U.esc(m.tomboNovo)) +
           linha('Tombo antigo', U.esc(m.tomboAntigo)) +
           (m.statusAnterior ? linha('Situação anterior', UI.chipStatus(m.statusAnterior)) : '') +
-          linha('Situação resultante', m.statusResultante && m.statusResultante !== '—'
-            ? UI.chipStatus(m.statusResultante) : '') +
+          linha('Situação resultante', UI.chipStatus(m.statusResultante)) +
           linha('Prédio', U.esc(m.predio)) +
           linha('Setor / Unidade', U.esc(m.setor)) +
+          linha('Técnico responsável', U.esc(m.tecnico)) +
           linha('TTR', UI.tagTTR(m.ttr)) +
           linha('Serviço solicitado', U.esc(m.servicoSolicitado)) +
           linha('Observação', U.esc(m.observacao)) +
@@ -308,13 +327,18 @@
   var CAMPOS = [
     ['#r-de', 'de', 'change'], ['#r-ate', 'ate', 'change'],
     ['#r-tipo', 'tipo', 'change'], ['#r-predio', 'predio', 'change'],
-    ['#r-status', 'status', 'change'], ['#r-equip', 'equipamento', 'change'],
-    ['#r-modelo', 'modelo', 'change'], ['#r-tombo', 'tombo', 'input'],
+    ['#r-setor', 'setor', 'change'], ['#r-status', 'status', 'change'],
+    ['#r-equip', 'equipamento', 'change'], ['#r-modelo', 'modelo', 'change'],
+    ['#r-tecnico', 'tecnico', 'change'], ['#r-ttr', 'ttr', 'change'],
+    ['#r-tombo', 'tombo', 'input'],
     ['#r-chamado', 'chamado', 'input'], ['#r-busca', 'busca', 'input']
   ];
 
   function sincronizarCampos(container) {
-    CAMPOS.forEach(function (c) { container.querySelector(c[0]).value = filtros[c[1]] || ''; });
+    CAMPOS.forEach(function (c) {
+      var el = container.querySelector(c[0]);
+      if (el) el.value = filtros[c[1]] || '';
+    });
   }
 
   function montar(container) {
@@ -325,7 +349,9 @@
     var redesenharDebounce = U.debounce(redesenhar, 200);
 
     CAMPOS.forEach(function (c) {
-      container.querySelector(c[0]).addEventListener(c[2], function () {
+      var el = container.querySelector(c[0]);
+      if (!el) return;
+      el.addEventListener(c[2], function () {
         filtros[c[1]] = this.value;
         pagina = 1;
         if (c[2] === 'input') redesenharDebounce();
@@ -384,7 +410,35 @@
 
     desenhar(container);
 
-    var cancelar = CELAB.store.assinar(function () { desenhar(container); });
+    /** Repinta os selects dos filtros quando as listas mudam. */
+    function repintarFiltros() {
+      var fontes = {
+        '#r-predio': L.get('predios'),
+        '#r-setor': L.get('setores'),
+        '#r-status': L.statusTodos(),
+        '#r-equip': L.get('equipamentos'),
+        '#r-modelo': L.get('modelos'),
+        '#r-tecnico': L.get('tecnicos')
+      };
+      Object.keys(fontes).forEach(function (sel) {
+        var el = container.querySelector(sel);
+        if (!el) return;
+        var atual = el.value;
+        el.innerHTML = UI.opcoes(fontes[sel], atual, 'Todos');
+        el.value = atual;
+        if (el.value !== atual) {
+          el.value = '';
+          var chave = (CAMPOS.find(function (c) { return c[0] === sel; }) || [])[1];
+          if (chave) filtros[chave] = '';
+        }
+      });
+      desenhar(container);
+    }
+
+    var cancelar = CELAB.store.assinar(function (ev) {
+      if (ev && ev.tipo === 'listas') return repintarFiltros();
+      desenhar(container);
+    });
     return { destruir: cancelar };
   }
 
