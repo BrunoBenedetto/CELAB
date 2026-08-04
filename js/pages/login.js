@@ -10,14 +10,17 @@
   function montar(raiz, aoEntrar) {
     raiz.className = 'login-screen';
     raiz.innerHTML =
-      '<main class="login-card">' +
+      '<main class="login-card" style="position:relative">' +
+
+        '<button type="button" id="btn-tema-login" class="icon-btn" ' +
+          'title="Alternar tema claro/escuro" aria-label="Alternar tema" ' +
+          'style="position:absolute;top:14px;right:14px"></button>' +
 
         // --- Espaço reservado para a logo do sistema -----------------------
-        // Para usar a logo definitiva, troque o conteúdo de .logo-slot__box
-        // por: <img src="assets/logo.png" alt="Logo CELAB">
+        // --- Nova class para identificar ---
         '<div class="logo-slot">' +
-          '<div class="logo-slot__box" id="logo-slot">CELAB</div>' +
-          '<div class="logo-slot__caption">Espaço reservado para a logo do sistema</div>' +
+          '<img id="logo-login" src="assets/logo.png" alt="Logo TJRR"></img>' +
+          '<div class="logo-slot__caption"></div>' +
         '</div>' +
 
         '<h1 class="login-title">Controle de Estoque de Laboratório</h1>' +
@@ -76,6 +79,29 @@
     var form = raiz.querySelector('#form-login');
     var erro = raiz.querySelector('#login-erro');
     var campoSenha = raiz.querySelector('#login-senha');
+
+    var btnTema = raiz.querySelector('#btn-tema-login');
+    var logoLogin = raiz.querySelector('#logo-login'); 
+
+    function pintarBotaoTema() {
+      btnTema.innerHTML = UI.icone(UI.temaAtual() === 'dark' ? 'sol' : 'lua', 17);
+    }
+
+    // Função da troca de logo
+    function pintarLogo() {
+      logoLogin.src = UI.temaAtual() === 'dark'
+        ? 'assets/logoBranca.png'
+        : 'assets/logo.png';
+    }
+
+    pintarBotaoTema();
+    pintarLogo(); 
+
+    btnTema.addEventListener('click', function () {
+      UI.alternarTema();
+      pintarBotaoTema();
+      pintarLogo(); 
+    });
 
     raiz.querySelector('#ver-senha').addEventListener('click', function () {
       var mostrando = campoSenha.type === 'text';
