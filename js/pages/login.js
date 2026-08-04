@@ -69,11 +69,6 @@
           '</div>' +
         '</form>' +
 
-        '<div class="login-hint">' +
-          'Acesso de demonstração: <code>admin</code> / <code>admin123</code>' +
-          '<br>Perfil técnico: <code>tecnico</code> / <code>tecnico123</code>' +
-        '</div>' +
-
       '</main>';
 
     var form = raiz.querySelector('#form-login');
