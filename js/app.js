@@ -48,7 +48,7 @@
         '<aside class="sidebar" id="sidebar">' +
           '<div class="sidebar__brand">' +
             // Substitua o texto por <img src="assets/logo.png" alt=""> quando tiver a logo.
-            '<div class="sidebar__logo" id="sidebar-logo">CL</div>' +
+            '<div class="sidebar__logo"><img src="assets/logoBranca.png" alt=""></div>'  +
             '<div style="min-width:0">' +
               '<div class="sidebar__name">CELAB</div>' +
               '<div class="sidebar__tag">Controle de Estoque</div>' +
